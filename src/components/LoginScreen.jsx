@@ -31,12 +31,6 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
     }
   };
 
-  const handleFillDemo = () => {
-    setEmail('admin@aiviz.ai');
-    setPassword('admin123');
-    setError('');
-  };
-
   return (
     <div className="login-screen-wrapper">
       {/* Top Bar for theme toggle */}
