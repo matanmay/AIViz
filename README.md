@@ -1,70 +1,181 @@
-# Getting Started with Create React App
+# AIViz — Human-In-The-Loop AI Assistant
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A research-grade AI chat interface designed for **Human-In-The-Loop (HITL) experiments**. Built with React and Supabase, this platform records all participant interactions for academic analysis while keeping the underlying AI model hidden from participants (blind study protocol).
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 📋 Overview
 
-### `npm start`
+This application serves as the experimental interface for a study on human interaction with AI language models. It provides a clean, distraction-free chat environment where:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- Participants interact with an AI assistant through a standard chat interface
+- All prompts, responses, and interaction events are logged to a Supabase database
+- The AI model identity is hidden from participants (blind study)
+- Access is restricted to pre-registered participants only (no self-registration)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+## 🚀 Getting Started
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Prerequisites
 
-### `npm run build`
+- Node.js 18+
+- A [Supabase](https://supabase.com) project
+- A [Google AI Studio](https://aistudio.google.com/app/apikey) API key (Gemini)
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Installation
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```bash
+# Clone the repository
+git clone https://github.com/matanmay/AIViz.git
+cd AIViz
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+# Install dependencies
+npm install
+```
 
-### `npm run eject`
+### Environment Setup
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Create a `.env` file in the root directory:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```env
+# AI Provider (Gemini via OpenAI Compatibility)
+REACT_APP_API_KEY=your_gemini_api_key_here
+REACT_APP_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+REACT_APP_MODEL=gemini-3.5-flash-lite
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+# Supabase
+REACT_APP_SUPABASE_URL=https://your-project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+> ⚠️ **Never commit `.env` to version control.** It is listed in `.gitignore`.
 
-## Learn More
+### Database Setup
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Run the schema in your Supabase project:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+1. Open **Supabase Dashboard → SQL Editor → New Query**
+2. Paste the contents of [`supabase/schema.sql`](supabase/schema.sql)
+3. Click **Run**
 
-### Code Splitting
+This creates three tables: `chats`, `messages`, and `experiment_logs`.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### Run Locally
 
-### Analyzing the Bundle Size
+```bash
+npm start
+# Open http://localhost:3000
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+---
 
-### Making a Progressive Web App
+## 👥 Participant Management
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Participants are added manually by the researcher — there is **no self-registration**.
 
-### Advanced Configuration
+1. Go to **Supabase Dashboard → Authentication → Users → Add User**
+2. Enter the participant's email and a password
+3. Share the credentials with the participant securely
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+---
 
-### Deployment
+## 📊 Data Collection
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+The following interaction events are automatically logged to `experiment_logs` in Supabase:
 
-### `npm run build` fails to minify
+| Event | Description |
+|-------|-------------|
+| `prompt_sent` | Every message sent by the participant, including drafting duration (ms) |
+| `response_received` | AI response, latency (ms), token count, and hidden model ID |
+| `content_copied` | When a participant copies a message or code block |
+| `regenerate_requested` | When a participant retries/regenerates a response |
+| `chat_switched` | Navigation between sessions |
+| `tab_blur` / `tab_focus` | When the participant switches away from the browser tab |
+| `user_logged_in` / `user_logged_out` | Session start and end |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Exporting Data
+
+From the Supabase SQL Editor:
+
+```sql
+-- Export all experiment logs
+SELECT * FROM experiment_logs ORDER BY created_at ASC;
+
+-- Export all messages with participant email
+SELECT m.*, c.user_id, e.user_email
+FROM messages m
+JOIN chats c ON m.chat_id = c.id
+JOIN experiment_logs e ON e.user_id = c.user_id
+ORDER BY m.created_at ASC;
+```
+
+---
+
+## 🔒 Blind Study Protocol
+
+- The AI model name is **never displayed** in the UI
+- Model information is stored exclusively in `experiment_logs.event_data` under a researcher-only field
+- Participants see only **"AI Assistant"** as the sender name
+- The Settings panel has been removed from the participant-facing UI
+
+---
+
+## 🗄️ Database Schema
+
+```
+chats              — Conversation sessions (id TEXT, user_id, title, timestamps)
+messages           — Individual messages (id TEXT, chat_id, role, content, tokens)
+experiment_logs    — Full telemetry (user_id, event_type, event_data JSONB, timestamps)
+```
+
+All tables use **Row Level Security (RLS)** — participants can only access their own data.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 (functional components + hooks) |
+| Styling | Vanilla CSS (dark/light mode) |
+| AI Provider | Google Gemini via OpenAI Compatibility API |
+| Auth & Database | Supabase (PostgreSQL + Auth) |
+| HTTP Client | Axios |
+| Icons | Lucide React |
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── components/
+│   ├── ChatWindow.jsx      # Main chat viewport
+│   ├── LoginScreen.jsx     # Participant login gate
+│   ├── Message.jsx         # Message bubble (user/assistant)
+│   ├── MessageInput.jsx    # Input with drafting timer
+│   └── Sidebar.jsx         # Session list and controls
+├── services/
+│   ├── api.js              # Gemini API integration
+│   ├── supabase.js         # Auth + DB sync
+│   └── telemetry.js        # Interaction event tracking
+└── App.jsx                 # Root component + state management
+
+supabase/
+└── schema.sql              # Database schema + RLS policies
+```
+
+---
+
+## 📝 Notes for Researchers
+
+- Chat deletion by participants **does not delete data from the database** — all records are permanently retained for analysis
+- If a participant clears their history, the data remains in Supabase under their `user_id`
+- The `event_data` JSONB field in `experiment_logs` contains the full context for each event including the hidden model identifier
+
+---
+
+## License
+
+For academic research use only.
