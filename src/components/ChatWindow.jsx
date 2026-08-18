@@ -12,9 +12,11 @@ export default function ChatWindow({
   onSend,
   onRetry,
   onCopy,
+  onRate,
   onClearChat,
   onSelectPrompt,
   isLoading,
+  awaitingFeedback,
   onToggleSidebar,
 }) {
   const messagesEndRef = useRef(null);
@@ -91,6 +93,8 @@ export default function ChatWindow({
                 message={msg}
                 isLast={index === messages.length - 1}
                 onCopy={onCopy}
+                onRate={onRate}
+                requiresFeedback={awaitingFeedback && index === messages.length - 1 && msg.role === 'assistant'}
                 onRetry={
                   index === messages.length - 1 && (msg.role === 'assistant' || msg.role === 'error')
                     ? onRetry
@@ -134,6 +138,12 @@ export default function ChatWindow({
           setInput={setInput}
           onSend={onSend}
           isLoading={isLoading}
+          disabled={awaitingFeedback}
+          placeholder={
+            awaitingFeedback
+              ? '⭐ Please rate the response above before continuing...'
+              : 'Write your prompt... (Enter to send, Shift+Enter for new line)'
+          }
         />
       </footer>
     </div>

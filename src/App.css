@@ -1852,3 +1852,110 @@
     padding: 10px 14px 14px;
   }
 }
+
+/* ==========================================================================
+   Feedback Rating Widget
+   ========================================================================== */
+.feedback-rating {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bg-secondary, rgba(255,255,255,0.04));
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+  width: fit-content;
+  flex-wrap: wrap;
+}
+
+.feedback-label {
+  font-size: 12px;
+  color: var(--text-muted, #8b95a5);
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.feedback-emojis {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.feedback-emoji-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px 5px;
+  border-radius: 8px;
+  line-height: 1;
+  transition: transform 0.15s ease, background 0.15s ease, filter 0.15s ease;
+  filter: grayscale(30%) opacity(0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feedback-emoji-btn:hover,
+.feedback-emoji-btn.hovered {
+  transform: scale(1.35);
+  filter: grayscale(0%) opacity(1);
+  background: var(--bg-hover, rgba(255,255,255,0.08));
+}
+
+.feedback-emoji-btn:active {
+  transform: scale(1.15);
+}
+
+.feedback-submitted {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  animation: feedback-pop 0.3s ease;
+}
+
+@keyframes feedback-pop {
+  0%   { transform: scale(0.85); opacity: 0; }
+  60%  { transform: scale(1.05); }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+.feedback-submitted-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.feedback-submitted-text {
+  font-size: 12px;
+  color: var(--text-muted, #8b95a5);
+  font-weight: 500;
+}
+
+/* Required state — pulses to draw attention */
+.feedback-rating.feedback-required {
+  border-color: var(--accent-primary, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  animation: feedback-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes feedback-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25); }
+  50%       { box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.10); }
+}
+
+.feedback-rating.feedback-required .feedback-label {
+  color: var(--accent-primary, #6366f1);
+  font-weight: 600;
+}
+
+.feedback-rating.feedback-required .feedback-emoji-btn {
+  filter: grayscale(0%) opacity(0.9);
+}
+
+/* Blocked textarea state */
+.chat-textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}

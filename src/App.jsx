@@ -13,6 +13,7 @@ import {
   getCurrentUser,
   logoutUser,
   subscribeToAuthChanges,
+  updateMessageFeedback,
 } from './services/supabase';
 import {
   trackPromptSent,
@@ -22,6 +23,7 @@ import {
   trackChatEvent,
   trackTabVisibility,
   trackAuthEvent,
+  trackFeedbackRating,
 } from './services/telemetry';
 
 // ── Hidden-chat helpers ───────────────────────────────────────────────────────
@@ -97,6 +99,8 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Tracks whether the last AI response is awaiting a feedback rating
+  const [awaitingFeedback, setAwaitingFeedback] = useState(false);
 
 
   const currentUserRef = useRef(currentUser);
@@ -193,6 +197,13 @@ export default function App() {
                 ...prev,
                 [visibleChats[0].id]: initialMsgs,
               }));
+              // Restore awaitingFeedback: block if last message is an unrated assistant reply
+              const lastMsg = initialMsgs[initialMsgs.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.userRating == null) {
+                setAwaitingFeedback(true);
+              } else {
+                setAwaitingFeedback(false);
+              }
             }
           }
         }
@@ -287,6 +298,22 @@ export default function App() {
           ...prev,
           [chatId]: remoteMsgs,
         }));
+        // Restore awaitingFeedback for this chat
+        const lastMsg = remoteMsgs[remoteMsgs.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.userRating == null) {
+          setAwaitingFeedback(true);
+        } else {
+          setAwaitingFeedback(false);
+        }
+      }
+    } else {
+      // Messages already in state — restore feedback state from what's there
+      const chatMsgs = messagesMap[chatId] || [];
+      const lastMsg = chatMsgs[chatMsgs.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.userRating == null) {
+        setAwaitingFeedback(true);
+      } else {
+        setAwaitingFeedback(false);
       }
     }
   };
@@ -438,6 +465,8 @@ export default function App() {
         ...prev,
         [activeChatId]: [...updatedMessages, assistantMsg],
       }));
+      // Require feedback before next prompt
+      setAwaitingFeedback(true);
     } catch (error) {
       console.error('Chat error:', error);
       const errorMsg = {
@@ -497,6 +526,8 @@ export default function App() {
         ...prev,
         [activeChatId]: [...contextMessages, assistantMsg],
       }));
+      // Require feedback before next prompt
+      setAwaitingFeedback(true);
     } catch (error) {
       console.error('Retry error:', error);
       const errorMsg = {
@@ -535,6 +566,28 @@ export default function App() {
       chatId: activeChatId,
       user: currentUser,
     });
+  };
+
+  // Telemetry + DB: Track 1-5 Feedback Rating and persist to messages table
+  const handleFeedbackRating = ({ rating, messageId, interactionId }) => {
+    // Store the rating on the message object in state so it survives re-renders
+    setMessagesMap((prev) => {
+      const chatMsgs = prev[activeChatId] || [];
+      return {
+        ...prev,
+        [activeChatId]: chatMsgs.map((msg) =>
+          msg.id === messageId ? { ...msg, userRating: rating } : msg
+        ),
+      };
+    });
+    trackFeedbackRating({
+      rating,
+      messageId,
+      chatId: activeChatId,
+      user: currentUser,
+    });
+    updateMessageFeedback({ interactionId, rating });
+    setAwaitingFeedback(false);
   };
 
   // Loading state while verifying session
@@ -585,9 +638,11 @@ export default function App() {
           onSend={handleSend}
           onRetry={handleRetry}
           onCopy={handleCopyTelemetry}
+          onRate={handleFeedbackRating}
           onClearChat={handleClearCurrentChat}
           onSelectPrompt={handleSelectSuggestedPrompt}
           isLoading={isLoading}
+          awaitingFeedback={awaitingFeedback}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         />

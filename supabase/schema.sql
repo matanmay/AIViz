@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS messages (
     response_at TIMESTAMP WITH TIME ZONE,
     tokens INTEGER,
     status TEXT DEFAULT 'completed',
+    feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5),
+    feedback_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -85,3 +87,7 @@ CREATE POLICY "Allow all on experiment_logs"
     ON experiment_logs FOR ALL
     USING (true)
     WITH CHECK (true);
+
+-- 7. Migration: add feedback columns to existing messages table (safe to re-run)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_at TIMESTAMP WITH TIME ZONE;

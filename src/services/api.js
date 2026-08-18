@@ -106,6 +106,8 @@ export const sendChatMessage = async ({
       throw new Error('Received an empty response from AI.');
     }
 
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+
     // Do NOT attach model name to assistantMsg — blind study protocol
     const assistantMsg = {
       id: `msg-${Date.now()}`,
@@ -113,9 +115,9 @@ export const sendChatMessage = async ({
       content: choice.message.content,
       timestamp: new Date().toISOString(),
       tokens: totalTokens,
+      // interactionId = the DB row ID (user message id) used to save feedback
+      interactionId: lastUserMsg?.id || null,
     };
-
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
 
     // Log to chats & messages tables (non-blocking)
     if (chatId) {

@@ -192,3 +192,18 @@ export const trackAuthEvent = ({ eventType, user }) => {
     user,
   });
 };
+
+/**
+ * Track 1-5 helpfulness rating submitted by the user for an AI response
+ */
+export const trackFeedbackRating = ({ rating, messageId, chatId, user }) => {
+  return logExperimentEvent({
+    eventType: 'response_feedback_rating',
+    eventData: {
+      rating,
+      message_id: messageId,
+    },
+    chatId,
+    user,
+  });
+};

@@ -303,6 +303,9 @@ export const fetchMessagesFromSupabase = async (chatId) => {
           content: row.response,
           timestamp: row.response_at || row.created_at,
           tokens: row.tokens,
+          // Restore rating and interaction reference from DB
+          userRating: row.feedback_rating ?? null,
+          interactionId: row.id,
         });
       }
     }
@@ -357,3 +360,39 @@ export const clearAllChatsFromSupabase = async (teamName = null) => {
     return false;
   }
 };
+
+/**
+ * Update a message row with the user's helpfulness feedback rating (1–5).
+ * interactionId is the user message's ID, which is the DB row ID in the
+ * messages table (one row per prompt+response interaction).
+ */
+export const updateMessageFeedback = async ({ interactionId, rating }) => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  if (!interactionId) {
+    console.warn('updateMessageFeedback: no interactionId provided, skipping DB update');
+    return false;
+  }
+
+  try {
+    const { error } = await client
+      .from('messages')
+      .update({
+        feedback_rating: rating,
+        feedback_at: new Date().toISOString(),
+      })
+      .eq('id', interactionId);
+
+    if (error) {
+      console.warn('Supabase feedback update error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Failed to save feedback rating to Supabase:', err);
+    return false;
+  }
+};
+
+
