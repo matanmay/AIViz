@@ -137,10 +137,10 @@ export default function Sidebar({
                 <User size={16} />
               </div>
               <div className="user-profile-info">
-                <span className="user-profile-email" title={currentUser.email}>
-                  {currentUser.email || 'Participant'}
+                <span className="user-profile-email" title={currentUser.team_name || currentUser.email}>
+                  {currentUser.team_name || currentUser.email || 'Participant'}
                 </span>
-                <span className="user-profile-role">Participant Active</span>
+                <span className="user-profile-role">Group Active</span>
               </div>
               <button
                 className="user-logout-btn"

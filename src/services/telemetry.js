@@ -10,13 +10,11 @@ export const logExperimentEvent = async ({
   chatId = null,
 }) => {
   const timestamp = new Date().toISOString();
-  const userId = user?.id || null;
-  const userEmail = user?.email || null;
+  const teamName = user?.team_name || user?.id || null;
 
   const logEntry = {
     id: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    user_id: userId,
-    user_email: userEmail,
+    team_name: teamName,
     chat_id: chatId ? String(chatId) : null,
     event_type: eventType,
     event_data: eventData,
@@ -42,8 +40,8 @@ export const logExperimentEvent = async ({
     try {
       const { error } = await client.from('experiment_logs').insert([
         {
-          user_id: userId,
-          user_email: userEmail,
+          id: logEntry.id,
+          team_name: teamName,
           chat_id: chatId ? String(chatId) : null,
           event_type: eventType,
           event_data: eventData,
@@ -189,8 +187,7 @@ export const trackAuthEvent = ({ eventType, user }) => {
   return logExperimentEvent({
     eventType,
     eventData: {
-      email: user?.email,
-      userId: user?.id,
+      team_name: user?.team_name || user?.id,
     },
     user,
   });

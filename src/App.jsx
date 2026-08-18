@@ -176,7 +176,7 @@ export default function App() {
   useEffect(() => {
     async function loadSupabaseData() {
       if (currentUser && isSupabaseConfigured()) {
-        const remoteChats = await fetchChatsFromSupabase(currentUser.id);
+        const remoteChats = await fetchChatsFromSupabase(currentUser.team_name);
         if (remoteChats && remoteChats.length > 0) {
           // Filter out chats the user has hidden/deleted in the UI
           const hiddenIds = getHiddenChatIds();
@@ -191,13 +191,7 @@ export default function App() {
             if (initialMsgs) {
               setMessagesMap((prev) => ({
                 ...prev,
-                [visibleChats[0].id]: initialMsgs.map((m) => ({
-                  id: m.id,
-                  role: m.role,
-                  content: m.content,
-                  timestamp: m.created_at,
-                  tokens: m.tokens,
-                })),
+                [visibleChats[0].id]: initialMsgs,
               }));
             }
           }
@@ -266,7 +260,7 @@ export default function App() {
     }
 
     if (isSupabaseConfigured() && currentUser) {
-      syncChatToSupabase(newSession, currentUser.id);
+      syncChatToSupabase(newSession, currentUser.team_name);
     }
   }, [activeChatId, currentUser]);
 
@@ -291,13 +285,7 @@ export default function App() {
       if (remoteMsgs) {
         setMessagesMap((prev) => ({
           ...prev,
-          [chatId]: remoteMsgs.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            timestamp: m.created_at,
-            tokens: m.tokens,
-          })),
+          [chatId]: remoteMsgs,
         }));
       }
     }
@@ -441,8 +429,8 @@ export default function App() {
         messages: updatedMessages,
         chatId: activeChatId,
         chatTitle: currentTitle,
-        userId: currentUser?.id || null,
-        userEmail: currentUser?.email || null,
+        userId: currentUser?.team_name || null,
+        userEmail: currentUser?.team_name || null,
         draftingDurationMs,
       });
 
@@ -501,8 +489,8 @@ export default function App() {
         messages: contextMessages,
         chatId: activeChatId,
         chatTitle: activeChat?.title || 'New Session',
-        userId: currentUser?.id || null,
-        userEmail: currentUser?.email || null,
+        userId: currentUser?.team_name || null,
+        userEmail: currentUser?.team_name || null,
       });
 
       setMessagesMap((prev) => ({

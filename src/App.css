@@ -1626,6 +1626,181 @@
 }
 
 /* ==========================================================================
+   Interaction Row — Prompt + Response side-by-side
+   ========================================================================== */
+.interactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.interaction-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.interaction-row:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-medium);
+}
+
+.interaction-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.prompt-cell {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.response-cell {
+  background: var(--bg-primary);
+}
+
+.cell-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cell-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-avatar-sm {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.assistant-avatar-sm {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+}
+
+.cell-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.cell-time {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cell-body {
+  flex: 1;
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.prompt-body {
+  color: var(--text-secondary);
+}
+
+.prompt-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.response-body .markdown-content {
+  font-size: 0.88rem;
+}
+
+.response-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.response-loading .spinner {
+  animation: spin 0.9s linear infinite;
+  color: var(--accent-primary);
+}
+
+.cell-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.interaction-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.divider-arrow {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  user-select: none;
+}
+
+/* Responsive: stack vertically on small screens */
+@media (max-width: 768px) {
+  .interaction-row {
+    flex-direction: column;
+  }
+
+  .interaction-divider {
+    width: 100%;
+    height: 28px;
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .divider-arrow {
+    transform: rotate(90deg);
+  }
+
+  .prompt-cell {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}
+
+/* ==========================================================================
    Responsive Breakpoints
    ========================================================================== */
 @media (max-width: 768px) {

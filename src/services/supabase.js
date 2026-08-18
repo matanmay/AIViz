@@ -37,8 +37,8 @@ export const getSupabaseClient = () => {
     try {
       supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
-          persistSession: true,
-          autoRefreshToken: true,
+          persistSession: false,
+          autoRefreshToken: false,
         },
       });
       lastUsedConfig = currentConfigKey;
@@ -52,110 +52,83 @@ export const getSupabaseClient = () => {
 };
 
 /* ==========================================================================
-   Supabase Authentication Methods
+   Custom Team-based Authentication (replaces Supabase Auth)
    ========================================================================== */
 
+const SESSION_KEY = 'aiviz_team_session';
+
 /**
- * Sign in user with Email & Password against Supabase Auth
+ * Sign in with a team name and password.
+ * Looks up the team in the `teams` table and compares password directly.
  */
-export const loginUser = async (email, password) => {
+export const loginUser = async (teamName, password) => {
+  const trimmedName = teamName.trim();
   const client = getSupabaseClient();
 
-  // If Supabase is not configured yet, check for local demo credentials
   if (!client) {
-    // Local demo mode fallback
-    // Demo user gets a stable valid UUID so FK constraints don't fail
-if (
-      (email.toLowerCase() === 'admin@aiviz.ai' || email.toLowerCase() === 'user@aiviz.ai') &&
-      password === 'admin123'
-    ) {
-      const demoUser = {
-        id: '00000000-0000-0000-0000-000000000001',
-        email: email.toLowerCase(),
-        user_metadata: { name: email.split('@')[0] },
-      };
-      localStorage.setItem('aiviz_demo_user', JSON.stringify(demoUser));
-      return { user: demoUser, session: { user: demoUser } };
-    }
-    throw new Error('Supabase is not configured. Please add your credentials in Settings or use demo: admin@aiviz.ai / admin123');
+    throw new Error(
+      'Supabase is not configured. Please add your credentials in the .env file.'
+    );
   }
 
   try {
-    const { data, error } = await client.auth.signInWithPassword({
-      email: email.trim(),
-      password: password,
-    });
+    const { data, error } = await client
+      .from('teams')
+      .select('team_name, password')
+      .eq('team_name', trimmedName)
+      .single();
 
-    if (error) {
-      throw error;
+    if (error || !data) {
+      throw new Error('Team not found. Please check your group name.');
     }
 
-    return data;
-  } catch (error) {
-    let message = error.message || 'Login failed. Please try again.';
-    if (message.includes('Invalid login credentials')) {
-      message = 'Invalid email or password. Please verify your credentials.';
-    } else if (message.includes('Email not confirmed')) {
-      message = 'Your email address has not been confirmed yet.';
+    if (data.password !== password) {
+      throw new Error('Invalid password. Please try again.');
     }
+
+    // Build a lightweight session object stored in localStorage
+    const session = {
+      team_name: data.team_name,
+      // Keep id and email aliases for backward compat with telemetry callers
+      id: data.team_name,
+      email: data.team_name,
+    };
+
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return { user: session, session: { user: session } };
+  } catch (err) {
+    const message =
+      err.message || 'Login failed. Please check your credentials.';
     throw new Error(message);
   }
 };
 
 /**
- * Sign out current user
+ * Sign out current team
  */
 export const logoutUser = async () => {
-  const client = getSupabaseClient();
-  localStorage.removeItem('aiviz_demo_user');
-
-  if (client) {
-    try {
-      await client.auth.signOut();
-    } catch (err) {
-      console.warn('Error signing out of Supabase:', err);
-    }
-  }
+  localStorage.removeItem(SESSION_KEY);
   return true;
 };
 
 /**
- * Get current authenticated user session
+ * Get current authenticated team session from localStorage
  */
 export const getCurrentUser = async () => {
-  // Check demo user in localStorage first
-  const savedDemo = localStorage.getItem('aiviz_demo_user');
-  if (savedDemo) {
-    try {
-      return JSON.parse(savedDemo);
-    } catch (e) {}
-  }
-
-  const client = getSupabaseClient();
-  if (!client) return null;
-
   try {
-    const { data: { session }, error } = await client.auth.getSession();
-    if (error || !session) return null;
-    return session.user;
-  } catch (err) {
-    console.warn('Error getting session:', err);
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
     return null;
   }
 };
 
 /**
- * Subscribe to Supabase Auth state changes
+ * No-op subscription shim (auth changes are handled via localStorage)
  */
-export const subscribeToAuthChanges = (callback) => {
-  const client = getSupabaseClient();
-  if (!client) return { unsubscribe: () => {} };
-
-  const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-    callback(session ? session.user : null);
-  });
-
-  return subscription;
+export const subscribeToAuthChanges = (_callback) => {
+  return { unsubscribe: () => {} };
 };
 
 /* ==========================================================================
@@ -165,7 +138,7 @@ export const subscribeToAuthChanges = (callback) => {
 /**
  * Save or update a chat session in Supabase
  */
-export const syncChatToSupabase = async (chat, userId = null) => {
+export const syncChatToSupabase = async (chat, teamName = null) => {
   const client = getSupabaseClient();
   if (!client) return null;
 
@@ -176,8 +149,8 @@ export const syncChatToSupabase = async (chat, userId = null) => {
       updated_at: new Date().toISOString(),
     };
 
-    if (userId) {
-      payload.user_id = userId;
+    if (teamName) {
+      payload.team_name = teamName;
     }
 
     const { data, error } = await client
@@ -198,52 +171,19 @@ export const syncChatToSupabase = async (chat, userId = null) => {
 };
 
 /**
- * Log an individual message to Supabase
+ * Log an individual message to Supabase — NOT used directly anymore.
+ * Use logCompleteInteraction instead which stores prompt+response in one row.
+ * Kept for backward compatibility.
  */
-export const logMessageToSupabase = async (message, userId = null) => {
-  const client = getSupabaseClient();
-  if (!client) return null;
-
-  // Ensure chat_id is a valid UUID (not null)
-  if (!message.chatId && !message.chat_id) {
-    console.warn('logMessageToSupabase: missing chatId, skipping.');
-    return null;
-  }
-
-  try {
-    const payload = {
-      id: String(message.id),           // TEXT primary key
-      chat_id: message.chatId || message.chat_id,
-      role: message.role,
-      content: message.content,
-      tokens: message.tokens || null,
-      status: message.status || 'completed',
-      created_at: message.timestamp || new Date().toISOString(),
-    };
-
-    if (userId) {
-      payload.user_id = userId;
-    }
-
-    const { data, error } = await client
-      .from('messages')
-      .upsert(payload, { onConflict: 'id' })
-      .select()
-      .single();
-
-    if (error) {
-      console.warn('Supabase message log error:', error.message, error.details);
-      return null;
-    }
-    return data;
-  } catch (err) {
-    console.warn('Error logging message to Supabase:', err);
-    return null;
-  }
+export const logMessageToSupabase = async (message, teamName = null) => {
+  // No-op: interactions are now stored via logCompleteInteraction
+  return null;
 };
 
 /**
- * Log a complete interaction (User query + Assistant response)
+ * Log a complete interaction (User query + Assistant response) as ONE row.
+ * Uses the user message ID as the interaction row ID.
+ * If the row already exists (user prompt saved first), upserts with response data.
  */
 export const logCompleteInteraction = async ({
   chatId,
@@ -256,29 +196,43 @@ export const logCompleteInteraction = async ({
   const client = getSupabaseClient();
   if (!client) return false;
 
+  // userId carries the team_name (aliased for backward compat)
+  const teamName = userId;
+
   try {
     // 1. Ensure chat session exists/is updated
-    await syncChatToSupabase({
-      id: chatId,
-      title: chatTitle,
-      model: model,
-    }, userId);
+    await syncChatToSupabase(
+      { id: chatId, title: chatTitle, model },
+      teamName
+    );
 
-    // 2. Log user message if provided
-    if (userMessage) {
-      await logMessageToSupabase({
-        ...userMessage,
-        chatId,
-      }, userId);
+    if (!userMessage) return false;
+
+    // 2. Upsert a single interaction row: prompt + response
+    const payload = {
+      id: String(userMessage.id),
+      chat_id: chatId,
+      prompt: userMessage.content,
+      prompt_at: userMessage.timestamp || new Date().toISOString(),
+      status: 'completed',
+      created_at: userMessage.timestamp || new Date().toISOString(),
+    };
+
+    if (teamName) payload.team_name = teamName;
+
+    if (assistantMessage) {
+      payload.response = assistantMessage.content;
+      payload.response_at = assistantMessage.timestamp || new Date().toISOString();
+      payload.tokens = assistantMessage.tokens || null;
     }
 
-    // 3. Log assistant message
-    if (assistantMessage) {
-      await logMessageToSupabase({
-        ...assistantMessage,
-        chatId,
-        model,
-      }, userId);
+    const { error } = await client
+      .from('messages')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Supabase interaction log error:', error.message, error.details);
+      return false;
     }
 
     return true;
@@ -289,9 +243,9 @@ export const logCompleteInteraction = async ({
 };
 
 /**
- * Fetch all chat sessions for the authenticated user
+ * Fetch all chat sessions for the authenticated team
  */
-export const fetchChatsFromSupabase = async (userId = null) => {
+export const fetchChatsFromSupabase = async (teamName = null) => {
   const client = getSupabaseClient();
   if (!client) return null;
 
@@ -301,8 +255,8 @@ export const fetchChatsFromSupabase = async (userId = null) => {
       .select('*')
       .order('updated_at', { ascending: false });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
+    if (teamName) {
+      query = query.eq('team_name', teamName);
     }
 
     const { data, error } = await query;
@@ -315,7 +269,9 @@ export const fetchChatsFromSupabase = async (userId = null) => {
 };
 
 /**
- * Fetch messages for a specific chat from Supabase
+ * Fetch messages for a specific chat from Supabase.
+ * Each DB row is one interaction (prompt + response);
+ * we expand it back into two message objects for the UI.
  */
 export const fetchMessagesFromSupabase = async (chatId) => {
   const client = getSupabaseClient();
@@ -329,7 +285,28 @@ export const fetchMessagesFromSupabase = async (chatId) => {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return data;
+
+    // Expand each interaction row into a pair of message objects
+    const expanded = [];
+    for (const row of data) {
+      expanded.push({
+        id: row.id,
+        role: 'user',
+        content: row.prompt,
+        timestamp: row.prompt_at || row.created_at,
+        tokens: null,
+      });
+      if (row.response) {
+        expanded.push({
+          id: `${row.id}-response`,
+          role: 'assistant',
+          content: row.response,
+          timestamp: row.response_at || row.created_at,
+          tokens: row.tokens,
+        });
+      }
+    }
+    return expanded;
   } catch (err) {
     console.warn('Error fetching messages from Supabase:', err.message);
     return null;
@@ -358,16 +335,16 @@ export const deleteChatFromSupabase = async (chatId) => {
 };
 
 /**
- * Clear all chat history for the user
+ * Clear all chat history for the team
  */
-export const clearAllChatsFromSupabase = async (userId = null) => {
+export const clearAllChatsFromSupabase = async (teamName = null) => {
   const client = getSupabaseClient();
   if (!client) return false;
 
   try {
     let query = client.from('chats').delete();
-    if (userId) {
-      query = query.eq('user_id', userId);
+    if (teamName) {
+      query = query.eq('team_name', teamName);
     } else {
       query = query.neq('id', '00000000-0000-0000-0000-000000000000');
     }

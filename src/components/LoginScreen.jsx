@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Bot, Lock, Mail, Eye, EyeOff, Loader2, AlertCircle, Sparkles, Shield, Sun, Moon } from 'lucide-react';
+import { Bot, Lock, User, Eye, EyeOff, Loader2, AlertCircle, Sparkles, Shield, Sun, Moon } from 'lucide-react';
 import { loginUser } from '../services/supabase';
 
 export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
-  const [email, setEmail] = useState('');
+  const [teamName, setTeamName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -11,8 +11,8 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !password) {
-      setError('Please enter both email and password.');
+    if (!teamName.trim() || !password) {
+      setError('Please enter both group name and password.');
       return;
     }
 
@@ -20,7 +20,7 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
     setError('');
 
     try {
-      const data = await loginUser(email, password);
+      const data = await loginUser(teamName, password);
       if (data && data.user) {
         onLoginSuccess(data.user);
       }
@@ -53,7 +53,7 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
           </div>
           <h1 className="login-title">AIViz Workspace</h1>
           <p className="login-subtitle">
-            Private AI Chat & Analytics Interface
+            Private AI Chat &amp; Analytics Interface
           </p>
         </div>
 
@@ -67,18 +67,18 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
           )}
 
           <div className="login-input-group">
-            <label htmlFor="login-email">Email Address</label>
+            <label htmlFor="login-team-name">Group Name</label>
             <div className="login-input-wrapper">
-              <Mail size={18} className="input-leading-icon" />
+              <User size={18} className="input-leading-icon" />
               <input
-                id="login-email"
-                type="email"
+                id="login-team-name"
+                type="text"
                 required
-                placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="e.g. Group A"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
                 disabled={isLoading}
-                autoComplete="email"
+                autoComplete="username"
                 className="login-input"
               />
             </div>
@@ -133,24 +133,9 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
         <div className="login-security-notice">
           <Shield size={16} className="security-icon" />
           <span>
-            Access is restricted to authorized accounts in the database. Contact your system administrator to request access.
+            Access is restricted to authorized groups. Contact your system administrator to request access.
           </span>
         </div>
-
-        {/* Quick Demo Credentials Helper */}
-        {/* <div className="demo-credentials-box">
-          <div className="demo-header">
-            <span>Demo credentials (Preview mode):</span>
-            <button
-              type="button"
-              className="fill-demo-btn"
-              onClick={handleFillDemo}
-            >
-              Fill Demo
-            </button>
-          </div>
-          <code>admin@aiviz.ai / admin123</code>
-        </div> */}
       </div>
     </div>
   );
