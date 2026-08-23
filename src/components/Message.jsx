@@ -1,6 +1,103 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Bot, User, Copy, Check, RotateCcw, AlertCircle } from 'lucide-react';
+import { Bot, User, Copy, Check, RotateCcw, AlertCircle, ChevronDown, ChevronUp, ImageOff } from 'lucide-react';
+
+// ── PlantUML Diagram Renderer ─────────────────────────────────────────────────
+// POSTs the raw PlantUML source to kroki.io and renders the returned SVG inline.
+// This avoids any encoding issues with the GET-based URL approach.
+function PlantUMLDiagram({ code }) {
+  const [showSource, setShowSource] = useState(false);
+  const [svgContent, setSvgContent] = useState(null);
+  const [fetchError, setFetchError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  // Fetch SVG from kroki.io on mount (or when code changes)
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setFetchError(false);
+    setSvgContent(null);
+
+    fetch('https://kroki.io/plantuml/svg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: code,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((svg) => {
+        if (!cancelled) setSvgContent(svg);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [code]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="plantuml-wrapper">
+      {/* Diagram Area */}
+      <div className="plantuml-diagram-area">
+        {loading && (
+          <div className="plantuml-loading">
+            <div className="plantuml-spinner" />
+            <span>Rendering diagram…</span>
+          </div>
+        )}
+        {!loading && fetchError && (
+          <div className="plantuml-error">
+            <ImageOff size={28} />
+            <span>Could not render diagram. Check your PlantUML syntax.</span>
+          </div>
+        )}
+        {!loading && svgContent && (
+          <div
+            className="plantuml-svg-container"
+            dangerouslySetInnerHTML={{ __html: svgContent }}
+          />
+        )}
+      </div>
+
+      {/* Footer: toggle source + copy */}
+      <div className="plantuml-footer">
+        <button
+          className="plantuml-toggle-btn"
+          onClick={() => setShowSource((v) => !v)}
+        >
+          {showSource ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          <span>{showSource ? 'Hide source' : 'Show PlantUML source'}</span>
+        </button>
+        <button className="code-copy-btn" onClick={handleCopy} title="Copy source">
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+
+      {showSource && (
+        <div className="plantuml-source">
+          <pre className="code-pre">
+            <code>{code}</code>
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 const RATINGS = [
   { value: 1, emoji: '😞', label: 'Not helpful' },
@@ -95,6 +192,11 @@ export default function Message({ message, onRetry, onCopy, onRate, isLast, requ
                       const lang = match ? match[1] : 'code';
 
                       if (!inline) {
+                        // ── PlantUML: render diagram + toggleable source ──
+                        if (lang === 'plantuml') {
+                          return <PlantUMLDiagram code={codeContent} />;
+                        }
+
                         return (
                           <div className="code-block-wrapper">
                             <div className="code-header">

@@ -1959,3 +1959,115 @@
   cursor: not-allowed;
   opacity: 0.45;
 }
+
+/* ==========================================================================
+   PlantUML Diagram Renderer
+   ========================================================================== */
+.plantuml-wrapper {
+  margin: 8px 0;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.plantuml-diagram-area {
+  padding: 20px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+[data-theme="dark"] .plantuml-diagram-area {
+  background: #f8f9fc;
+}
+
+.plantuml-img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+}
+
+.plantuml-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+  padding: 20px;
+}
+
+.plantuml-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--border-subtle);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+.plantuml-svg-container {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.plantuml-svg-container svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+
+.plantuml-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  padding: 16px;
+  text-align: center;
+}
+
+.plantuml-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+}
+
+.plantuml-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.plantuml-toggle-btn:hover {
+  color: var(--accent-primary);
+  background: var(--bg-card-hover);
+}
+
+.plantuml-source {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.plantuml-source .code-pre {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+}
