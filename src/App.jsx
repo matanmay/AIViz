@@ -29,22 +29,22 @@ import {
 
 // ── Hidden-chat helpers ───────────────────────────────────────────────────────
 // Chats deleted from the UI are NOT removed from Supabase (research data),
-// but we track their IDs locally so they stay hidden on the next load.
-const HIDDEN_KEY = 'aiviz_hidden_chats';
-
-const getHiddenChatIds = () => {
+// but we track their IDs locally per user so they stay hidden on the next load.
+const getHiddenChatIds = (userKey) => {
   try {
-    const raw = localStorage.getItem(HIDDEN_KEY);
+    const key = userKey ? `aiviz_hidden_chats_${userKey}` : 'aiviz_hidden_chats';
+    const raw = localStorage.getItem(key);
     return new Set(raw ? JSON.parse(raw) : []);
   } catch {
     return new Set();
   }
 };
 
-const addHiddenChatIds = (ids) => {
-  const current = getHiddenChatIds();
+const addHiddenChatIds = (ids, userKey) => {
+  const current = getHiddenChatIds(userKey);
   ids.forEach((id) => current.add(id));
-  localStorage.setItem(HIDDEN_KEY, JSON.stringify([...current]));
+  const key = userKey ? `aiviz_hidden_chats_${userKey}` : 'aiviz_hidden_chats';
+  localStorage.setItem(key, JSON.stringify([...current]));
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -58,43 +58,14 @@ export default function App() {
     return localStorage.getItem('aiviz_theme') || 'dark';
   });
 
-  // Chat sessions state
-  const [chats, setChats] = useState(() => {
-    const saved = localStorage.getItem('aiviz_chats');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse cached chats', e);
-      }
-    }
-    const initialId = `chat-${Date.now()}`;
-    return [
-      {
-        id: initialId,
-        title: 'New Session',
-        created_at: new Date().toISOString(),
-      },
-    ];
-  });
+  // Chat sessions state - isolated per user
+  const [chats, setChats] = useState([]);
 
   // Active Chat ID
-  const [activeChatId, setActiveChatId] = useState(() => {
-    return chats[0]?.id || `chat-${Date.now()}`;
-  });
+  const [activeChatId, setActiveChatId] = useState('');
 
   // Messages map: { [chatId]: Array<Message> }
-  const [messagesMap, setMessagesMap] = useState(() => {
-    const saved = localStorage.getItem('aiviz_messages');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Failed to parse cached messages', e);
-      }
-    }
-    return {};
-  });
+  const [messagesMap, setMessagesMap] = useState({});
 
   // Input text & status
   const [input, setInput] = useState('');
@@ -164,58 +135,125 @@ export default function App() {
     };
   }, []);
 
-  // Persist chats and messages to localStorage
+  // Persist chats and messages to localStorage scoped per user
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('aiviz_chats', JSON.stringify(chats));
+    if (currentUser?.team_name && chats.length > 0) {
+      localStorage.setItem(`aiviz_chats_${currentUser.team_name}`, JSON.stringify(chats));
     }
   }, [chats, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('aiviz_messages', JSON.stringify(messagesMap));
+    if (currentUser?.team_name) {
+      localStorage.setItem(`aiviz_messages_${currentUser.team_name}`, JSON.stringify(messagesMap));
     }
   }, [messagesMap, currentUser]);
 
-  // Load user chats from Supabase upon login
+  // Load user chats and messages whenever currentUser changes (login / user switch)
   useEffect(() => {
-    async function loadSupabaseData() {
-      if (currentUser && isSupabaseConfigured()) {
-        const remoteChats = await fetchChatsFromSupabase(currentUser.team_name);
-        if (remoteChats && remoteChats.length > 0) {
-          // Filter out chats the user has hidden/deleted in the UI
-          const hiddenIds = getHiddenChatIds();
-          const visibleChats = remoteChats.filter((c) => !hiddenIds.has(c.id));
+    let isCancelled = false;
 
-          if (visibleChats.length > 0) {
-            setChats(visibleChats);
-            setActiveChatId(visibleChats[0].id);
+    async function loadUserData() {
+      if (!currentUser) {
+        setChats([]);
+        setActiveChatId('');
+        setMessagesMap({});
+        setAwaitingFeedback(false);
+        return;
+      }
 
-            // Fetch messages for initial chat
-            const initialMsgs = await fetchMessagesFromSupabase(visibleChats[0].id);
-            if (initialMsgs) {
-              setMessagesMap((prev) => ({
-                ...prev,
-                [visibleChats[0].id]: initialMsgs,
-              }));
-              // Restore awaitingFeedback: block if last message is an unrated assistant reply
-              const lastMsg = initialMsgs[initialMsgs.length - 1];
-              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.userRating == null) {
-                setAwaitingFeedback(true);
-              } else {
-                setAwaitingFeedback(false);
+      const userKey = currentUser.team_name || currentUser.id;
+
+      // 1. Try to load cached chats & messages for this specific user
+      let cachedChats = null;
+      let cachedMessages = {};
+      try {
+        const rawChats = localStorage.getItem(`aiviz_chats_${userKey}`);
+        if (rawChats) cachedChats = JSON.parse(rawChats);
+        const rawMsgs = localStorage.getItem(`aiviz_messages_${userKey}`);
+        if (rawMsgs) cachedMessages = JSON.parse(rawMsgs);
+      } catch (e) {
+        console.warn('Failed to parse cached user data', e);
+      }
+
+      if (cachedChats && cachedChats.length > 0) {
+        if (!isCancelled) {
+          setChats(cachedChats);
+          setActiveChatId(cachedChats[0].id);
+          setMessagesMap(cachedMessages || {});
+        }
+      } else {
+        const initialId = `chat-${Date.now()}`;
+        const defaultChat = {
+          id: initialId,
+          title: 'New Session',
+          created_at: new Date().toISOString(),
+        };
+        if (!isCancelled) {
+          setChats([defaultChat]);
+          setActiveChatId(initialId);
+          setMessagesMap({});
+        }
+      }
+
+      // 2. Fetch fresh user chats from Supabase if configured
+      if (isSupabaseConfigured() && currentUser.team_name) {
+        try {
+          const remoteChats = await fetchChatsFromSupabase(currentUser.team_name);
+          if (isCancelled) return;
+
+          if (remoteChats) {
+            const hiddenIds = getHiddenChatIds(userKey);
+            const visibleChats = remoteChats.filter((c) => !hiddenIds.has(c.id));
+
+            if (visibleChats.length > 0) {
+              setChats(visibleChats);
+              setActiveChatId(visibleChats[0].id);
+
+              // Fetch messages for initial chat
+              const initialMsgs = await fetchMessagesFromSupabase(visibleChats[0].id);
+              if (!isCancelled && initialMsgs) {
+                setMessagesMap({
+                  [visibleChats[0].id]: initialMsgs,
+                });
+
+                // Restore awaitingFeedback: block if last message is an unrated assistant reply
+                const lastMsg = initialMsgs[initialMsgs.length - 1];
+                if (lastMsg && lastMsg.role === 'assistant' && lastMsg.userRating == null) {
+                  setAwaitingFeedback(true);
+                } else {
+                  setAwaitingFeedback(false);
+                }
               }
+            } else {
+              // User has no visible remote chats
+              const initialId = `chat-${Date.now()}`;
+              const defaultChat = {
+                id: initialId,
+                title: 'New Session',
+                created_at: new Date().toISOString(),
+              };
+              setChats([defaultChat]);
+              setActiveChatId(initialId);
+              setMessagesMap({});
+              setAwaitingFeedback(false);
             }
           }
+        } catch (err) {
+          console.warn('Error syncing remote chats:', err);
         }
       }
     }
-    loadSupabaseData();
+
+    loadUserData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser]);
 
   // Get active chat metadata & messages
-  const activeChat = chats.find((c) => c.id === activeChatId) || chats[0];
-  const currentMessages = messagesMap[activeChatId] || [];
+  const activeChat = chats.find((c) => c.id === activeChatId) || chats[0] || { id: activeChatId || 'default', title: 'New Session' };
+  const currentMessages = (activeChatId && messagesMap[activeChatId]) || [];
 
   // Toggle Dark/Light Theme
   const handleToggleTheme = () => {
@@ -246,6 +284,11 @@ export default function App() {
     }
     await logoutUser();
     setCurrentUser(null);
+    setChats([]);
+    setActiveChatId('');
+    setMessagesMap({});
+    setInput('');
+    setAwaitingFeedback(false);
   };
 
   // Create a brand new chat session
@@ -321,6 +364,7 @@ export default function App() {
 
   // Delete a specific chat session (UI only — DB records preserved for research)
   const handleDeleteChat = async (chatId) => {
+    const userKey = currentUser?.team_name || currentUser?.id;
     const remainingChats = chats.filter((c) => c.id !== chatId);
 
     if (currentUser) {
@@ -341,7 +385,7 @@ export default function App() {
 
     // Mark as hidden so it won't reappear when Supabase reloads
     // (DB record is intentionally preserved for research)
-    addHiddenChatIds([chatId]);
+    addHiddenChatIds([chatId], userKey);
 
     if (activeChatId === chatId) {
       if (remainingChats.length > 0) {
@@ -365,6 +409,8 @@ export default function App() {
       return;
     }
 
+    const userKey = currentUser?.team_name || currentUser?.id;
+
     if (currentUser) {
       trackChatEvent({
         eventType: 'all_chats_cleared',
@@ -387,7 +433,7 @@ export default function App() {
 
     // Mark all previous chats as hidden so they won't reappear on Supabase reload
     // (DB records are intentionally preserved for research)
-    addHiddenChatIds(chats.map((c) => c.id));
+    addHiddenChatIds(chats.map((c) => c.id), userKey);
   };
 
   // Clear current active chat messages
