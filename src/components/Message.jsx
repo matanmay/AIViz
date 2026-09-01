@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Bot,
@@ -11,6 +11,12 @@ import {
   ChevronUp,
   ImageOff,
   Edit3,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
+  Download,
+  X,
+  Scan,
 } from 'lucide-react';
 
 // Global in-memory cache for rendered PlantUML image URLs
@@ -43,8 +49,7 @@ async function getKrokiUrl(code) {
 }
 
 // ── PlantUML Diagram Renderer & Live Editor ──────────────────────────────────
-// Uses Kroki GET URLs rendered in <img> tags to completely avoid CORS issues.
-// Re-renders only when code is received or manually edited.
+// Renders diagrams in large view with zoom controls & fullscreen lightbox.
 const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }) {
   const [showSource, setShowSource] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -58,6 +63,19 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [savedBadge, setSavedBadge] = useState(false);
+
+  // Zoom & Pan state
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = React.useRef({ x: 0, y: 0 });
+
+  const [lightboxPanOffset, setLightboxPanOffset] = useState({ x: 0, y: 0 });
+  const [isLightboxDragging, setIsLightboxDragging] = useState(false);
+  const lightboxDragStartRef = React.useRef({ x: 0, y: 0 });
+  const lightboxContainerRef = useRef(null);
+  const lightboxImgRef = useRef(null);
 
   // Sync if outer code prop changes (e.g. from history load or parent update)
   React.useEffect(() => {
@@ -96,6 +114,19 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
       cancelled = true;
     };
   }, [currentCode]);
+
+  // Handle ESC key to close fullscreen modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    if (isFullscreen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(isEditing ? draftCode : currentCode);
@@ -142,38 +173,215 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
     }
   };
 
+  const handleZoomIn = (e) => {
+    e?.stopPropagation();
+    setZoomLevel((prev) => Math.min(5, Number((prev + (prev < 0.5 ? 0.1 : 0.2)).toFixed(2))));
+  };
+
+  const handleZoomOut = (e) => {
+    e?.stopPropagation();
+    setZoomLevel((prev) => Math.max(0.1, Number((prev - (prev <= 0.5 ? 0.05 : 0.2)).toFixed(2))));
+  };
+
+  const handleResetZoom = (e) => {
+    e?.stopPropagation();
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+    setLightboxPanOffset({ x: 0, y: 0 });
+  };
+
+  const handleFitToScreen = (e) => {
+    e?.stopPropagation();
+    if (!lightboxImgRef.current || !lightboxContainerRef.current) return;
+    const cWidth = lightboxContainerRef.current.clientWidth - 40;
+    const cHeight = lightboxContainerRef.current.clientHeight - 40;
+    const nWidth = lightboxImgRef.current.naturalWidth || lightboxImgRef.current.clientWidth;
+    const nHeight = lightboxImgRef.current.naturalHeight || lightboxImgRef.current.clientHeight;
+
+    if (nWidth && nHeight) {
+      const scaleX = cWidth / nWidth;
+      const scaleY = cHeight / nHeight;
+      const fitScale = Math.min(scaleX, scaleY, 2.5);
+      setZoomLevel(Math.max(0.1, Number(fitScale.toFixed(2))));
+      setLightboxPanOffset({ x: 0, y: 0 });
+    }
+  };
+
+  // Mouse Pan Handlers for Inline Diagram
+  const handleMouseDown = (e) => {
+    if (e.button !== 0) return;
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX - panOffset.x,
+      y: e.clientY - panOffset.y,
+    };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    setPanOffset({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y,
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Mouse Pan Handlers for Fullscreen Lightbox
+  const handleLightboxMouseDown = (e) => {
+    if (e.button !== 0) return;
+    setIsLightboxDragging(true);
+    lightboxDragStartRef.current = {
+      x: e.clientX - lightboxPanOffset.x,
+      y: e.clientY - lightboxDragStartRef.current.y,
+    };
+  };
+
+  const handleLightboxMouseMove = (e) => {
+    if (!isLightboxDragging) return;
+    setLightboxPanOffset({
+      x: e.clientX - lightboxDragStartRef.current.x,
+      y: e.clientY - lightboxDragStartRef.current.y,
+    });
+  };
+
+  const handleLightboxMouseUp = () => {
+    setIsLightboxDragging(false);
+  };
+
+  const handleDownload = async (e) => {
+    e?.stopPropagation();
+    if (!diagramUrl) return;
+    try {
+      const res = await fetch(diagramUrl);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `plantuml-diagram-${Date.now()}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.warn('Download error:', err);
+      window.open(diagramUrl, '_blank');
+    }
+  };
+
   return (
-    <div className="plantuml-wrapper">
-      {/* Diagram Area */}
-      <div className="plantuml-diagram-area">
-        {loading && (
-          <div className="plantuml-loading">
-            <div className="plantuml-spinner" />
-            <span>Rendering diagram…</span>
-          </div>
-        )}
-        {fetchError && !loading && (
-          <div className="plantuml-error">
-            <ImageOff size={28} />
-            <span>Could not render diagram. Check your PlantUML syntax.</span>
-          </div>
-        )}
-        {diagramUrl && (
-          <img
-            src={diagramUrl}
-            alt="PlantUML Diagram"
-            className={`plantuml-img ${loading ? 'plantuml-img-hidden' : ''}`}
-            onLoad={() => {
-              setLoading(false);
-              setFetchError(false);
-            }}
-            onError={() => {
-              setLoading(false);
-              setFetchError(true);
-            }}
-          />
-        )}
-      </div>
+    <>
+      <div className="plantuml-wrapper">
+        {/* Diagram Area with floating toolbar */}
+        <div className="plantuml-diagram-area">
+          {/* Floating zoom & expand toolbar */}
+          {diagramUrl && !loading && !fetchError && (
+            <div className="plantuml-floating-toolbar">
+              <div className="plantuml-zoom-controls">
+                <button
+                  className="plantuml-tool-btn"
+                  onClick={handleZoomIn}
+                  title="Zoom in (+)"
+                  disabled={zoomLevel >= 5}
+                >
+                  <ZoomIn size={14} />
+                </button>
+                <button
+                  className="plantuml-tool-btn zoom-indicator-btn"
+                  onClick={handleResetZoom}
+                  title="Reset zoom and position (100%)"
+                >
+                  <span>{Math.round(zoomLevel * 100)}%</span>
+                </button>
+                <button
+                  className="plantuml-tool-btn"
+                  onClick={handleZoomOut}
+                  title="Zoom out (-)"
+                  disabled={zoomLevel <= 0.1}
+                >
+                  <ZoomOut size={14} />
+                </button>
+              </div>
+
+              {(panOffset.x !== 0 || panOffset.y !== 0) && (
+                <button
+                  className="plantuml-tool-btn pan-reset-btn"
+                  onClick={() => setPanOffset({ x: 0, y: 0 })}
+                  title="Reset pan position"
+                >
+                  <RotateCcw size={12} />
+                  <span>Center</span>
+                </button>
+              )}
+
+              <button
+                className="plantuml-tool-btn"
+                onClick={handleDownload}
+                title="Download SVG diagram"
+              >
+                <Download size={14} />
+              </button>
+
+              <button
+                className="plantuml-tool-btn expand-btn"
+                onClick={() => {
+                  setLightboxPanOffset({ x: 0, y: 0 });
+                  setIsFullscreen(true);
+                }}
+                title="Full size view"
+              >
+                <Maximize2 size={14} />
+                <span>Expand</span>
+              </button>
+            </div>
+          )}
+
+          {loading && (
+            <div className="plantuml-loading">
+              <div className="plantuml-spinner" />
+              <span>Rendering diagram…</span>
+            </div>
+          )}
+
+          {fetchError && !loading && (
+            <div className="plantuml-error">
+              <ImageOff size={28} />
+              <span>Could not render diagram. Check your PlantUML syntax.</span>
+            </div>
+          )}
+
+          {diagramUrl && (
+            <div
+              className={`plantuml-canvas-viewport ${isDragging ? 'is-dragging' : ''}`}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              title="Click & drag to move diagram"
+            >
+              <img
+                src={diagramUrl}
+                alt="PlantUML Diagram"
+                style={{
+                  transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+                  transformOrigin: 'center center',
+                }}
+                draggable={false}
+                className={`plantuml-img ${loading ? 'plantuml-img-hidden' : ''}`}
+                onLoad={() => {
+                  setLoading(false);
+                  setFetchError(false);
+                }}
+                onError={() => {
+                  setLoading(false);
+                  setFetchError(true);
+                }}
+              />
+            </div>
+          )}
+        </div>
 
       {/* Footer: toggle source + edit button + copy */}
       <div className="plantuml-footer">
@@ -307,6 +515,102 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
         </div>
       )}
     </div>
+
+    {/* Fullscreen Lightbox Modal */}
+    {isFullscreen && diagramUrl && (
+      <div className="plantuml-lightbox-backdrop" onClick={() => setIsFullscreen(false)}>
+        <div className="plantuml-lightbox-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="plantuml-lightbox-header">
+            <div className="plantuml-lightbox-title">
+              <span>PlantUML Diagram Preview</span>
+            </div>
+            <div className="plantuml-lightbox-actions">
+              <div className="plantuml-zoom-controls">
+                <button
+                  className="plantuml-tool-btn"
+                  onClick={handleZoomIn}
+                  title="Zoom in (+)"
+                  disabled={zoomLevel >= 5}
+                >
+                  <ZoomIn size={15} />
+                </button>
+                <button
+                  className="plantuml-tool-btn zoom-indicator-btn"
+                  onClick={handleResetZoom}
+                  title="Reset zoom (100%)"
+                >
+                  <span>{Math.round(zoomLevel * 100)}%</span>
+                </button>
+                <button
+                  className="plantuml-tool-btn"
+                  onClick={handleZoomOut}
+                  title="Zoom out (-)"
+                  disabled={zoomLevel <= 0.1}
+                >
+                  <ZoomOut size={15} />
+                </button>
+              </div>
+              <button
+                className="plantuml-tool-btn"
+                onClick={handleFitToScreen}
+                title="Fit diagram to screen"
+              >
+                <Scan size={14} />
+                <span>Fit</span>
+              </button>
+
+              {(lightboxPanOffset.x !== 0 || lightboxPanOffset.y !== 0) && (
+                <button
+                  className="plantuml-tool-btn pan-reset-btn"
+                  onClick={() => setLightboxPanOffset({ x: 0, y: 0 })}
+                  title="Reset pan position"
+                >
+                  <RotateCcw size={13} />
+                  <span>Center</span>
+                </button>
+              )}
+              <button
+                className="plantuml-tool-btn download-btn"
+                onClick={handleDownload}
+                title="Download SVG diagram"
+              >
+                <Download size={14} />
+                <span>Download SVG</span>
+              </button>
+              <button
+                className="plantuml-lightbox-close-btn"
+                onClick={() => setIsFullscreen(false)}
+                title="Close (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+          <div
+            ref={lightboxContainerRef}
+            className={`plantuml-lightbox-body ${isLightboxDragging ? 'is-dragging' : ''}`}
+            onMouseDown={handleLightboxMouseDown}
+            onMouseMove={handleLightboxMouseMove}
+            onMouseUp={handleLightboxMouseUp}
+            onMouseLeave={handleLightboxMouseUp}
+            title="Click & drag to move diagram"
+          >
+            <img
+              ref={lightboxImgRef}
+              src={diagramUrl}
+              alt="PlantUML Diagram Fullscreen"
+              style={{
+                transform: `translate(${lightboxPanOffset.x}px, ${lightboxPanOffset.y}px) scale(${zoomLevel})`,
+                transformOrigin: 'center center',
+              }}
+              draggable={false}
+              className="plantuml-lightbox-img"
+            />
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 });
 // ─────────────────────────────────────────────────────────────────────────────

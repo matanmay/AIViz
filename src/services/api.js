@@ -6,7 +6,7 @@ import { trackResponseReceived } from './telemetry';
 export const DEFAULT_EXPERIMENT_MODEL =
   process.env.REACT_APP_DEFAULT_MODEL ||
   process.env.REACT_APP_MODEL ||
-  'gemini-3.5-flash-lite';
+  'gemini-3.7-flash';
 
 // Get API Key from UI settings or .env (optional when using Supabase Edge Functions)
 export const getApiKey = () => {
