@@ -10,7 +10,6 @@ import {
   Bot,
   LogOut,
   User,
-  FlaskConical
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../services/supabase';
 

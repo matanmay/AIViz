@@ -395,4 +395,37 @@ export const updateMessageFeedback = async ({ interactionId, rating }) => {
   }
 };
 
+/**
+ * Update the response content for a message row when PlantUML / content is edited.
+ */
+export const updateMessageResponse = async ({ interactionId, response }) => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  if (!interactionId) {
+    console.warn('updateMessageResponse: no interactionId provided, skipping DB update');
+    return false;
+  }
+
+  try {
+    const { error } = await client
+      .from('messages')
+      .update({
+        response,
+        response_at: new Date().toISOString(),
+      })
+      .eq('id', interactionId);
+
+    if (error) {
+      console.warn('Supabase message update error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Failed to update message response in Supabase:', err);
+    return false;
+  }
+};
+
+
 

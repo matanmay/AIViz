@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logCompleteInteraction } from './supabase';
+import { getSupabaseClient, isSupabaseConfigured, logCompleteInteraction } from './supabase';
 import { trackResponseReceived } from './telemetry';
 
 // Default model configured for the experiment
@@ -8,7 +8,7 @@ export const DEFAULT_EXPERIMENT_MODEL =
   process.env.REACT_APP_MODEL ||
   'gemini-3.5-flash-lite';
 
-// Get API Key from UI settings or .env (supports Gemini or OpenAI keys)
+// Get API Key from UI settings or .env (optional when using Supabase Edge Functions)
 export const getApiKey = () => {
   const customKey = localStorage.getItem('aiviz_api_key') || localStorage.getItem('aiviz_openai_api_key');
   return (
@@ -47,9 +47,8 @@ export const getApiEndpoint = () => {
 };
 
 /**
- * Send chat messages to OpenAI-compatible endpoint (Gemini / OpenAI)
- * Logs interaction to Supabase and telemetry.
- * No mock/demo fallback — always calls the real API.
+ * Send chat messages either via Supabase Edge Function (secure, hides API key)
+ * or via direct client endpoint fallback.
  */
 export const sendChatMessage = async ({
   messages,
@@ -61,116 +60,160 @@ export const sendChatMessage = async ({
   draftingDurationMs = null,
   systemPrompt = 'You are an expert AI Assistant specialized in Conceptual Modeling, Systems Analysis, and Software Engineering. Help the user structure domain models, entity relationships, and architectural representations cleanly and accurately. Avoid disclosing your underlying model name or version.',
 }) => {
-  const apiKey = getApiKey();
-  const endpoint = getApiEndpoint();
   const startTime = Date.now();
+  let choice = null;
+  let totalTokens = null;
 
-  if (!apiKey) {
-    throw new Error('No API key configured. Please add your Gemini API key to the .env file or via Settings (⚙️).');
-  }
+  // 1. Try Supabase Edge Function first (recommended — keeps API key completely hidden from client DevTools)
+  const supabase = getSupabaseClient();
+  let usedEdgeFunction = false;
 
-  // Format messages payload for OpenAI-compatible API
-  // Filter out any error/system messages before sending
-  const formattedMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages
-      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
-      .map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
-  ];
-
-  try {
-    const response = await axios.post(
-      endpoint,
-      {
-        model: model,
-        messages: formattedMessages,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+  if (supabase && isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: {
+          messages,
+          model,
+          systemPrompt,
+          temperature: 0.7,
         },
-        timeout: 60000,
+      });
+
+      if (error) {
+        // If error is 404 / Function not found or not deployed yet, fall through to direct call
+        console.warn('Supabase Edge Function returned error, trying fallback:', error);
+      } else if (data?.choices?.[0]) {
+        choice = data.choices[0];
+        totalTokens = data.usage?.total_tokens || null;
+        usedEdgeFunction = true;
+      } else if (data?.error) {
+        throw new Error(data.error.message || 'Edge function error.');
       }
-    );
-
-    const latencyMs = Date.now() - startTime;
-    const choice = response.data?.choices?.[0];
-    const totalTokens = response.data?.usage?.total_tokens || null;
-
-    if (!choice || !choice.message) {
-      throw new Error('Received an empty response from AI.');
-    }
-
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-
-    // Do NOT attach model name to assistantMsg — blind study protocol
-    const assistantMsg = {
-      id: `msg-${Date.now()}`,
-      role: 'assistant',
-      content: choice.message.content,
-      timestamp: new Date().toISOString(),
-      tokens: totalTokens,
-      // interactionId = the DB row ID (user message id) used to save feedback
-      interactionId: lastUserMsg?.id || null,
-    };
-
-    // Log to chats & messages tables (non-blocking)
-    if (chatId) {
-      logCompleteInteraction({
-        chatId,
-        chatTitle,
-        model,
-        userMessage: lastUserMsg,
-        assistantMessage: assistantMsg,
-        userId,
-      }).catch((err) => console.warn('Supabase logging error:', err));
-    }
-
-    // Log telemetry event (non-blocking)
-    trackResponseReceived({
-      response: choice.message.content,
-      latencyMs,
-      tokens: totalTokens,
-      actualModel: model, // Secret — logged for researcher only
-      chatId,
-      user: { id: userId, email: userEmail },
-    }).catch((err) => console.warn('Telemetry logging error:', err));
-
-    return {
-      message: assistantMsg,
-      usage: response.data.usage,
-    };
-  } catch (error) {
-    let errorMessage = 'Failed to get response from AI. Please try again.';
-
-    if (error.response) {
-      const status = error.response.status;
-      const apiError = error.response.data?.error?.message;
-
-      if (status === 401 || status === 403) {
-        errorMessage = 'Invalid API Key. Please verify your Gemini / OpenAI API key in Settings (⚙️).';
-      } else if (status === 429) {
-        errorMessage = 'Rate limit reached or quota exceeded. Please try again in a moment.';
-      } else if (status === 400) {
-        errorMessage = `Bad Request: ${apiError || 'Invalid request parameters.'}`;
-      } else if (status === 404) {
-        errorMessage = `Model not found: "${model}". Please check the model name in Settings (⚙️).`;
-      } else if (apiError) {
-        errorMessage = apiError;
+    } catch (edgeErr) {
+      console.warn('Edge function invoke exception, attempting fallback:', edgeErr.message);
+      // If no local API key exists, throw the edge function error so user knows
+      const apiKey = getApiKey();
+      if (!apiKey) {
+        throw new Error(
+          edgeErr.message ||
+            'Could not call Supabase Edge Function and no local client API key is configured.'
+        );
       }
-    } else if (error.code === 'ECONNABORTED') {
-      errorMessage = 'Request timed out. Please check your network connection.';
-    } else if (error.message) {
-      errorMessage = error.message;
     }
-
-    const customError = new Error(errorMessage);
-    customError.originalError = error;
-    throw customError;
   }
+
+  // 2. Direct client call fallback (if Edge Function not used/deployed and local key exists)
+  if (!usedEdgeFunction) {
+    const apiKey = getApiKey();
+    const endpoint = getApiEndpoint();
+
+    if (!apiKey) {
+      throw new Error(
+        'No API key configured. Please set GEMINI_API_KEY in your Supabase Edge Function secrets, or add an API key in .env / Settings.'
+      );
+    }
+
+    const formattedMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages
+        .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+    ];
+
+    try {
+      const response = await axios.post(
+        endpoint,
+        {
+          model: model,
+          messages: formattedMessages,
+          temperature: 0.7,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          timeout: 60000,
+        }
+      );
+
+      choice = response.data?.choices?.[0];
+      totalTokens = response.data?.usage?.total_tokens || null;
+    } catch (error) {
+      let errorMessage = 'Failed to get response from AI. Please try again.';
+
+      if (error.response) {
+        const status = error.response.status;
+        const apiError = error.response.data?.error?.message;
+
+        if (status === 401 || status === 403) {
+          errorMessage = 'Invalid API Key. Please verify your Gemini / OpenAI API key in Settings (⚙️).';
+        } else if (status === 429) {
+          errorMessage = 'Rate limit reached or quota exceeded. Please try again in a moment.';
+        } else if (status === 400) {
+          errorMessage = `Bad Request: ${apiError || 'Invalid request parameters.'}`;
+        } else if (status === 404) {
+          errorMessage = `Model not found: "${model}". Please check the model name in Settings (⚙️).`;
+        } else if (apiError) {
+          errorMessage = apiError;
+        }
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please check your network connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      const customError = new Error(errorMessage);
+      customError.originalError = error;
+      throw customError;
+    }
+  }
+
+  if (!choice || !choice.message) {
+    throw new Error('Received an empty response from AI.');
+  }
+
+  const latencyMs = Date.now() - startTime;
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+
+  // Do NOT attach model name to assistantMsg — blind study protocol
+  const assistantMsg = {
+    id: `msg-${Date.now()}`,
+    role: 'assistant',
+    content: choice.message.content,
+    timestamp: new Date().toISOString(),
+    tokens: totalTokens,
+    // interactionId = the DB row ID (user message id) used to save feedback
+    interactionId: lastUserMsg?.id || null,
+  };
+
+  // Log to chats & messages tables (non-blocking)
+  if (chatId) {
+    logCompleteInteraction({
+      chatId,
+      chatTitle,
+      model,
+      userMessage: lastUserMsg,
+      assistantMessage: assistantMsg,
+      userId,
+    }).catch((err) => console.warn('Supabase logging error:', err));
+  }
+
+  // Log telemetry event (non-blocking)
+  trackResponseReceived({
+    response: choice.message.content,
+    latencyMs,
+    tokens: totalTokens,
+    actualModel: model, // Secret — logged for researcher only
+    chatId,
+    user: { id: userId, email: userEmail },
+  }).catch((err) => console.warn('Telemetry logging error:', err));
+
+  return {
+    message: assistantMsg,
+    usage: { total_tokens: totalTokens },
+  };
 };

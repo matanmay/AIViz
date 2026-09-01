@@ -13,6 +13,7 @@ export default function ChatWindow({
   onRetry,
   onCopy,
   onRate,
+  onUpdateMessage,
   onClearChat,
   onSelectPrompt,
   isLoading,
@@ -94,6 +95,7 @@ export default function ChatWindow({
                 isLast={index === messages.length - 1}
                 onCopy={onCopy}
                 onRate={onRate}
+                onUpdateMessage={onUpdateMessage}
                 requiresFeedback={awaitingFeedback && index === messages.length - 1 && msg.role === 'assistant'}
                 onRetry={
                   index === messages.length - 1 && (msg.role === 'assistant' || msg.role === 'error')

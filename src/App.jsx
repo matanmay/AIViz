@@ -14,6 +14,7 @@ import {
   logoutUser,
   subscribeToAuthChanges,
   updateMessageFeedback,
+  updateMessageResponse,
 } from './services/supabase';
 import {
   trackPromptSent,
@@ -590,6 +591,43 @@ export default function App() {
     setAwaitingFeedback(false);
   };
 
+  // Update message content (e.g. when PlantUML diagram is manually edited)
+  const handleUpdateMessage = (messageId, newContent, editDetails = null) => {
+    // 1. Update messages state so active conversation & next prompt context reflects the edited code
+    setMessagesMap((prev) => {
+      const chatMsgs = prev[activeChatId] || [];
+      return {
+        ...prev,
+        [activeChatId]: chatMsgs.map((msg) =>
+          msg.id === messageId ? { ...msg, content: newContent } : msg
+        ),
+      };
+    });
+
+    // 2. If Supabase is configured and message has an interactionId, persist the change to DB
+    const chatMsgs = messagesMap[activeChatId] || [];
+    const targetMsg = chatMsgs.find((m) => m.id === messageId);
+    if (targetMsg?.interactionId && isSupabaseConfigured()) {
+      updateMessageResponse({
+        interactionId: targetMsg.interactionId,
+        response: newContent,
+      });
+    }
+
+    // 3. Telemetry: log the manual edit event
+    if (currentUser) {
+      trackChatEvent({
+        eventType: 'plantuml_code_edited',
+        chatId: activeChatId,
+        details: {
+          messageId,
+          ...(editDetails || {}),
+        },
+        user: currentUser,
+      });
+    }
+  };
+
   // Loading state while verifying session
   if (isAuthLoading) {
     return (
@@ -639,6 +677,7 @@ export default function App() {
           onRetry={handleRetry}
           onCopy={handleCopyTelemetry}
           onRate={handleFeedbackRating}
+          onUpdateMessage={handleUpdateMessage}
           onClearChat={handleClearCurrentChat}
           onSelectPrompt={handleSelectSuggestedPrompt}
           isLoading={isLoading}

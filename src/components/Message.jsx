@@ -1,50 +1,145 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Bot, User, Copy, Check, RotateCcw, AlertCircle, ChevronDown, ChevronUp, ImageOff } from 'lucide-react';
+import {
+  Bot,
+  User,
+  Copy,
+  Check,
+  RotateCcw,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  ImageOff,
+  Edit3,
+} from 'lucide-react';
 
-// ── PlantUML Diagram Renderer ─────────────────────────────────────────────────
-// POSTs the raw PlantUML source to kroki.io and renders the returned SVG inline.
-// This avoids any encoding issues with the GET-based URL approach.
-function PlantUMLDiagram({ code }) {
+// Global in-memory cache for rendered PlantUML image URLs
+// Key: trimmed PlantUML code string, Value: Kroki URL string
+const plantUmlUrlCache = new Map();
+
+// Helper to generate Kroki GET URL with browser-native deflate compression
+// GET requests on <img> elements have zero CORS restrictions.
+async function getKrokiUrl(code) {
+  try {
+    if (typeof CompressionStream !== 'undefined') {
+      const stream = new Blob([new TextEncoder().encode(code)]).stream();
+      const compressedStream = stream.pipeThrough(new CompressionStream('deflate'));
+      const buffer = await new Response(compressedStream).arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      return `https://kroki.io/plantuml/svg/${base64}`;
+    }
+  } catch (err) {
+    console.warn('CompressionStream error:', err);
+  }
+  return null;
+}
+
+// ── PlantUML Diagram Renderer & Live Editor ──────────────────────────────────
+// Uses Kroki GET URLs rendered in <img> tags to completely avoid CORS issues.
+// Re-renders only when code is received or manually edited.
+const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }) {
   const [showSource, setShowSource] = useState(false);
-  const [svgContent, setSvgContent] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentCode, setCurrentCode] = useState(code);
+  const [draftCode, setDraftCode] = useState(code);
+  const [isModified, setIsModified] = useState(false);
+
+  const initialKey = (code || '').trim();
+  const [diagramUrl, setDiagramUrl] = useState(() => plantUmlUrlCache.get(initialKey) || null);
   const [fetchError, setFetchError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [savedBadge, setSavedBadge] = useState(false);
 
-  // Fetch SVG from kroki.io on mount (or when code changes)
+  // Sync if outer code prop changes (e.g. from history load or parent update)
   React.useEffect(() => {
+    setCurrentCode(code);
+    setDraftCode(code);
+  }, [code]);
+
+  // Compute Kroki URL only when currentCode changes
+  React.useEffect(() => {
+    const key = (currentCode || '').trim();
+    if (!key) return;
+
+    // Instant cache hit
+    if (plantUmlUrlCache.has(key)) {
+      setDiagramUrl(plantUmlUrlCache.get(key));
+      setFetchError(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setFetchError(false);
-    setSvgContent(null);
 
-    fetch('https://kroki.io/plantuml/svg', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: code,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((svg) => {
-        if (!cancelled) setSvgContent(svg);
-      })
-      .catch(() => {
-        if (!cancelled) setFetchError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    getKrokiUrl(currentCode).then((url) => {
+      if (cancelled) return;
+      if (url) {
+        plantUmlUrlCache.set(key, url);
+        setDiagramUrl(url);
+      } else {
+        setFetchError(true);
+        setLoading(false);
+      }
+    });
 
-    return () => { cancelled = true; };
-  }, [code]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCode]);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(isEditing ? draftCode : currentCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleStartEdit = () => {
+    setDraftCode(currentCode);
+    setIsEditing(true);
+    setShowSource(true);
+  };
+
+  const handleCancelEdit = () => {
+    setDraftCode(currentCode);
+    setIsEditing(false);
+  };
+
+  const handleApplySave = () => {
+    const trimmed = draftCode.trim();
+    if (!trimmed) return;
+
+    setCurrentCode(draftCode);
+    setIsModified(draftCode !== code);
+    setIsEditing(false);
+    setSavedBadge(true);
+    setTimeout(() => setSavedBadge(false), 3000);
+
+    if (onSaveCode) {
+      onSaveCode(draftCode);
+    }
+  };
+
+  const handleResetToOriginal = () => {
+    setDraftCode(code);
+    setCurrentCode(code);
+    setIsModified(false);
+    setIsEditing(false);
+    setSavedBadge(true);
+    setTimeout(() => setSavedBadge(false), 3000);
+
+    if (onSaveCode) {
+      onSaveCode(code);
+    }
   };
 
   return (
@@ -57,45 +152,163 @@ function PlantUMLDiagram({ code }) {
             <span>Rendering diagram…</span>
           </div>
         )}
-        {!loading && fetchError && (
+        {fetchError && !loading && (
           <div className="plantuml-error">
             <ImageOff size={28} />
             <span>Could not render diagram. Check your PlantUML syntax.</span>
           </div>
         )}
-        {!loading && svgContent && (
-          <div
-            className="plantuml-svg-container"
-            dangerouslySetInnerHTML={{ __html: svgContent }}
+        {diagramUrl && (
+          <img
+            src={diagramUrl}
+            alt="PlantUML Diagram"
+            className={`plantuml-img ${loading ? 'plantuml-img-hidden' : ''}`}
+            onLoad={() => {
+              setLoading(false);
+              setFetchError(false);
+            }}
+            onError={() => {
+              setLoading(false);
+              setFetchError(true);
+            }}
           />
         )}
       </div>
 
-      {/* Footer: toggle source + copy */}
+      {/* Footer: toggle source + edit button + copy */}
       <div className="plantuml-footer">
-        <button
-          className="plantuml-toggle-btn"
-          onClick={() => setShowSource((v) => !v)}
-        >
-          {showSource ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          <span>{showSource ? 'Hide source' : 'Show PlantUML source'}</span>
-        </button>
-        <button className="code-copy-btn" onClick={handleCopy} title="Copy source">
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
-        </button>
+        <div className="plantuml-footer-left">
+          <button
+            className="plantuml-toggle-btn"
+            onClick={() => {
+              if (isEditing && showSource) {
+                setIsEditing(false);
+              }
+              setShowSource((v) => !v);
+            }}
+          >
+            {showSource ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            <span>{showSource ? 'Hide source' : 'Show PlantUML source'}</span>
+          </button>
+
+          {!isEditing && (
+            <button
+              className="plantuml-edit-toggle-btn"
+              onClick={handleStartEdit}
+              title="Edit PlantUML code manually"
+            >
+              <Edit3 size={13} />
+              <span>Edit code</span>
+            </button>
+          )}
+
+          {isModified && (
+            <span className="plantuml-modified-pill" title="Code was edited manually">
+              Edited
+            </span>
+          )}
+
+          {savedBadge && (
+            <span className="plantuml-saved-pill">
+              <Check size={11} /> Saved & Updated
+            </span>
+          )}
+        </div>
+
+        <div className="plantuml-footer-right">
+          {isModified && !isEditing && (
+            <button
+              className="plantuml-reset-btn"
+              onClick={handleResetToOriginal}
+              title="Reset to AI's original code"
+            >
+              <RotateCcw size={12} />
+              <span>Reset</span>
+            </button>
+          )}
+          <button className="code-copy-btn" onClick={handleCopy} title="Copy source">
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+            <span>{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+        </div>
       </div>
 
+      {/* Source View or Interactive Code Editor */}
       {showSource && (
-        <div className="plantuml-source">
-          <pre className="code-pre">
-            <code>{code}</code>
-          </pre>
+        <div className="plantuml-source-section">
+          {isEditing ? (
+            <div className="plantuml-editor-container">
+              <div className="plantuml-editor-top">
+                <div className="plantuml-editor-title">
+                  <Edit3 size={13} className="text-accent" />
+                  <span>Editing PlantUML Source</span>
+                  <span className="plantuml-editor-hint">
+                    (Next prompts will build on your edited code)
+                  </span>
+                </div>
+              </div>
+              <textarea
+                className="plantuml-code-textarea"
+                value={draftCode}
+                onChange={(e) => setDraftCode(e.target.value)}
+                placeholder="Type PlantUML code here..."
+                rows={Math.max(6, Math.min(20, draftCode.split('\n').length + 2))}
+                spellCheck="false"
+                autoFocus
+              />
+              <div className="plantuml-editor-actions">
+                <div className="plantuml-editor-actions-left">
+                  <button
+                    className="plantuml-action-save-btn"
+                    onClick={handleApplySave}
+                    title="Apply changes and update diagram"
+                  >
+                    <Check size={13} />
+                    <span>Apply & Save Changes</span>
+                  </button>
+                  <button
+                    className="plantuml-action-cancel-btn"
+                    onClick={handleCancelEdit}
+                    title="Cancel editing"
+                  >
+                    <span>Cancel</span>
+                  </button>
+                </div>
+                {draftCode !== code && (
+                  <button
+                    className="plantuml-action-revert-btn"
+                    onClick={() => setDraftCode(code)}
+                    title="Reset textarea to original code"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Revert to original</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="plantuml-source">
+              <div className="plantuml-source-header">
+                <span className="plantuml-source-lang">plantuml</span>
+                <button
+                  className="plantuml-edit-quick-btn"
+                  onClick={handleStartEdit}
+                  title="Edit this code"
+                >
+                  <Edit3 size={12} />
+                  <span>Edit code</span>
+                </button>
+              </div>
+              <pre className="code-pre">
+                <code className="language-plantuml">{currentCode}</code>
+              </pre>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
-}
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -107,7 +320,15 @@ const RATINGS = [
   { value: 5, emoji: '😄', label: 'Very helpful' },
 ];
 
-export default function Message({ message, onRetry, onCopy, onRate, isLast, requiresFeedback }) {
+function Message({
+  message,
+  onRetry,
+  onCopy,
+  onRate,
+  onUpdateMessage,
+  isLast,
+  requiresFeedback,
+}) {
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(null);
   // Rating is stored in parent state (message.userRating) — not local state
@@ -143,6 +364,92 @@ export default function Message({ message, onRetry, onCopy, onRate, isLast, requ
       return '';
     }
   };
+
+  // Memoize markdown components to avoid destroying & remounting subcomponents on typing/hover
+  const markdownComponents = React.useMemo(
+    () => ({
+      p({ children }) {
+        return <div className="markdown-paragraph">{children}</div>;
+      },
+      code({ node, inline, className, children, ...props }) {
+        const match = /language-(\w+)/.exec(className || '');
+        const codeContent = String(children).replace(/\n$/, '');
+        const lang = match ? match[1] : 'code';
+
+        if (!inline) {
+          // ── PlantUML: render diagram + editable source ──
+          if (lang === 'plantuml') {
+            return (
+              <PlantUMLDiagram
+                code={codeContent}
+                onSaveCode={(newCode) => {
+                  if (!onUpdateMessage) return;
+                  let newContent = message.content;
+                  const targetBlock = '```plantuml\n' + codeContent + '\n```';
+                  if (newContent.includes(targetBlock)) {
+                    newContent = newContent.replace(
+                      targetBlock,
+                      '```plantuml\n' + newCode + '\n```'
+                    );
+                  } else {
+                    const escaped = codeContent
+                      .trim()
+                      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(
+                      '```plantuml\\s*' + escaped + '\\s*```',
+                      'g'
+                    );
+                    if (regex.test(newContent)) {
+                      newContent = newContent.replace(
+                        regex,
+                        '```plantuml\n' + newCode + '\n```'
+                      );
+                    } else {
+                      newContent = newContent.replace(
+                        /```plantuml[\s\S]*?```/,
+                        '```plantuml\n' + newCode + '\n```'
+                      );
+                    }
+                  }
+                  onUpdateMessage(message.id, newContent, {
+                    oldCode: codeContent,
+                    newCode,
+                  });
+                }}
+              />
+            );
+          }
+
+          return (
+            <div className="code-block-wrapper">
+              <div className="code-header">
+                <span className="code-lang">{lang}</span>
+                <button
+                  className="code-copy-btn"
+                  onClick={() => handleCopyText(codeContent, 'code', lang)}
+                  title="Copy code"
+                >
+                  <Copy size={12} />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <pre className="code-pre">
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              </pre>
+            </div>
+          );
+        }
+        return (
+          <code className="inline-code" {...props}>
+            {children}
+          </code>
+        );
+      },
+    }),
+    [message.content, message.id, onUpdateMessage]
+  );
 
   return (
     <div className={`message-row ${isUser ? 'user-row' : 'assistant-row'} ${isError ? 'error-row' : ''}`}>
@@ -184,48 +491,7 @@ export default function Message({ message, onRetry, onCopy, onRate, isLast, requ
               <p className="user-text">{message.content}</p>
             ) : (
               <div className="markdown-content">
-                <ReactMarkdown
-                  components={{
-                    code({ node, inline, className, children, ...props }) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const codeContent = String(children).replace(/\n$/, '');
-                      const lang = match ? match[1] : 'code';
-
-                      if (!inline) {
-                        // ── PlantUML: render diagram + toggleable source ──
-                        if (lang === 'plantuml') {
-                          return <PlantUMLDiagram code={codeContent} />;
-                        }
-
-                        return (
-                          <div className="code-block-wrapper">
-                            <div className="code-header">
-                              <span className="code-lang">{lang}</span>
-                              <button
-                                className="code-copy-btn"
-                                onClick={() => handleCopyText(codeContent, 'code', lang)}
-                                title="Copy code"
-                              >
-                                <Copy size={12} />
-                                <span>Copy</span>
-                              </button>
-                            </div>
-                            <pre className="code-pre">
-                              <code className={className} {...props}>
-                                {children}
-                              </code>
-                            </pre>
-                          </div>
-                        );
-                      }
-                      return (
-                        <code className="inline-code" {...props}>
-                          {children}
-                        </code>
-                      );
-                    },
-                  }}
-                >
+                <ReactMarkdown components={markdownComponents}>
                   {message.content}
                 </ReactMarkdown>
               </div>
@@ -294,4 +560,7 @@ export default function Message({ message, onRetry, onCopy, onRate, isLast, requ
     </div>
   );
 }
+
+export default React.memo(Message);
+
 
