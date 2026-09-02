@@ -39,11 +39,6 @@ npm install
 Create a `.env` file in the root directory:
 
 ```env
-# AI Provider (Gemini via OpenAI Compatibility)
-REACT_APP_API_KEY=your_gemini_api_key_here
-REACT_APP_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-REACT_APP_MODEL=gemini-3.5-flash-lite
-
 # Supabase
 REACT_APP_SUPABASE_URL=https://your-project.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
