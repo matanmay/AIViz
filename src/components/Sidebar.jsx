@@ -139,7 +139,7 @@ export default function Sidebar({
                 <span className="user-profile-email" title={currentUser.team_name || currentUser.email}>
                   {currentUser.team_name || currentUser.email || 'Participant'}
                 </span>
-                <span className="user-profile-role">Group Active</span>
+                <span className="user-profile-role">User Active</span>
               </div>
               <button
                 className="user-logout-btn"
@@ -155,13 +155,6 @@ export default function Sidebar({
 
         {/* Sidebar Footer Controls */}
         <div className="sidebar-footer">
-          {chats.length > 0 && (
-            <button className="sidebar-footer-btn clear-all-btn" onClick={onClearAllChats}>
-              <Trash2 size={16} />
-              <span>Clear History</span>
-            </button>
-          )}
-
           <div className="footer-action-row">
             <button className="sidebar-footer-btn theme-toggle-btn" onClick={onToggleTheme}>
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}

@@ -1,16 +1,29 @@
 -- ============================================================================
 -- Supabase Schema for Human-In-The-Loop Conceptual Modeling Experiment
 -- Run this script in the Supabase SQL Editor (Dashboard > SQL Editor > New Query)
--- Safe to re-run: uses IF NOT EXISTS and IF EXISTS guards
+-- Safe to re-run: uses IF NOT EXISTS, IF EXISTS guards and ON CONFLICT handling
 -- ============================================================================
 
--- 0. Teams / credentials table (replaces Supabase Auth)
---    Stores group names and plain-text passwords supplied by the researcher.
+-- 0. Teams table (stores group/user credentials and designated LLM model)
 CREATE TABLE IF NOT EXISTS teams (
     team_name TEXT PRIMARY KEY,
     password  TEXT NOT NULL,
+    model     TEXT NOT NULL DEFAULT 'gemini-3.5-flash-lite',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Migration: Add model column to teams if it does not exist
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS model TEXT NOT NULL DEFAULT 'gemini-3.5-flash-lite';
+
+-- Clean up any redundant users table if previously created
+DROP TABLE IF EXISTS users CASCADE;
+
+-- Seed default teams/users with requested designated LLMs
+INSERT INTO teams (team_name, password, model)
+VALUES 
+    ('demo', 'demo123', 'gemini-3.5-flash-lite'),
+    ('netta', 'netta123', 'gpt-5.6')
+ON CONFLICT (team_name) DO UPDATE SET model = EXCLUDED.model;
 
 -- 1. Create chats / conversation sessions table
 --    NOTE: id is TEXT to support JS-generated chat-<timestamp> IDs
@@ -50,6 +63,7 @@ CREATE TABLE IF NOT EXISTS experiment_logs (
 );
 
 -- 4. Create indexes for fast retrieval and researcher export
+CREATE INDEX IF NOT EXISTS idx_teams_team_name ON teams(team_name);
 CREATE INDEX IF NOT EXISTS idx_chats_team_name ON chats(team_name, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_messages_team_name ON messages(team_name, created_at DESC);
@@ -63,7 +77,7 @@ ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE experiment_logs ENABLE ROW LEVEL SECURITY;
 
--- 6. Open RLS policies (no auth.uid() — authentication is handled in application layer)
+-- 6. Open RLS policies (authentication is handled in application layer)
 DROP POLICY IF EXISTS "Allow all on teams" ON teams;
 CREATE POLICY "Allow all on teams"
     ON teams FOR ALL

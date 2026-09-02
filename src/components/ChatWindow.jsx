@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import Message from './Message';
 import MessageInput from './MessageInput';
-import { Bot, Trash2 } from 'lucide-react';
+import { Bot } from 'lucide-react';
 
 
 export default function ChatWindow({
@@ -59,16 +59,6 @@ export default function ChatWindow({
         </div>
 
         <div className="header-right">
-          {messages.length > 0 && (
-            <button
-              className="clear-chat-btn"
-              onClick={onClearChat}
-              title="Clear current session messages"
-            >
-              <Trash2 size={16} />
-              <span>Clear Session</span>
-            </button>
-          )}
         </div>
       </header>
 

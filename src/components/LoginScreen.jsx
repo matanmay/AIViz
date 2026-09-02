@@ -67,14 +67,14 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
           )}
 
           <div className="login-input-group">
-            <label htmlFor="login-team-name">Group Name</label>
+            <label htmlFor="login-team-name">Username</label>
             <div className="login-input-wrapper">
               <User size={18} className="input-leading-icon" />
               <input
                 id="login-team-name"
                 type="text"
                 required
-                placeholder="e.g. Group A"
+                placeholder="e.g. demo or netta"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 disabled={isLoading}

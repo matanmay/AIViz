@@ -503,9 +503,10 @@ export default function App() {
         messages: updatedMessages,
         chatId: activeChatId,
         chatTitle: currentTitle,
-        userId: currentUser?.team_name || null,
-        userEmail: currentUser?.team_name || null,
+        userId: currentUser?.team_name || currentUser?.username || null,
+        userEmail: currentUser?.team_name || currentUser?.username || null,
         draftingDurationMs,
+        model: currentUser?.model,
       });
 
       setMessagesMap((prev) => ({
@@ -565,8 +566,9 @@ export default function App() {
         messages: contextMessages,
         chatId: activeChatId,
         chatTitle: activeChat?.title || 'New Session',
-        userId: currentUser?.team_name || null,
-        userEmail: currentUser?.team_name || null,
+        userId: currentUser?.team_name || currentUser?.username || null,
+        userEmail: currentUser?.team_name || currentUser?.username || null,
+        model: currentUser?.model,
       });
 
       setMessagesMap((prev) => ({

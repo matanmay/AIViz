@@ -58,8 +58,9 @@ export const getSupabaseClient = () => {
 const SESSION_KEY = 'aiviz_team_session';
 
 /**
- * Sign in with a team name and password.
+ * Sign in with a team name / username and password.
  * Looks up the team in the `teams` table and compares password directly.
+ * Also retrieves the team's designated LLM model.
  */
 export const loginUser = async (teamName, password) => {
   const trimmedName = teamName.trim();
@@ -74,24 +75,25 @@ export const loginUser = async (teamName, password) => {
   try {
     const { data, error } = await client
       .from('teams')
-      .select('team_name, password')
+      .select('team_name, password, model')
       .eq('team_name', trimmedName)
       .single();
 
     if (error || !data) {
-      throw new Error('Team not found. Please check your group name.');
+      throw new Error('Team/User not found. Please check your group name or username.');
     }
 
     if (data.password !== password) {
       throw new Error('Invalid password. Please try again.');
     }
 
-    // Build a lightweight session object stored in localStorage
+    // Build session object stored in localStorage
     const session = {
       team_name: data.team_name,
-      // Keep id and email aliases for backward compat with telemetry callers
+      username: data.team_name,
       id: data.team_name,
       email: data.team_name,
+      model: data.model || 'gemini-3.5-flash-lite',
     };
 
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -104,7 +106,7 @@ export const loginUser = async (teamName, password) => {
 };
 
 /**
- * Sign out current team
+ * Sign out current team/user
  */
 export const logoutUser = async () => {
   localStorage.removeItem(SESSION_KEY);
@@ -112,13 +114,36 @@ export const logoutUser = async () => {
 };
 
 /**
- * Get current authenticated team session from localStorage
+ * Get current authenticated session from localStorage,
+ * and refresh the designated model from Supabase if connected.
  */
 export const getCurrentUser = async () => {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const session = JSON.parse(raw);
+
+    const client = getSupabaseClient();
+    const teamName = session.team_name || session.username || session.id;
+
+    if (client && teamName) {
+      try {
+        const { data: teamRow } = await client
+          .from('teams')
+          .select('model')
+          .eq('team_name', teamName)
+          .single();
+
+        if (teamRow?.model) {
+          session.model = teamRow.model;
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        }
+      } catch {
+        // Keep local cached session if network/db query fails
+      }
+    }
+
+    return session;
   } catch {
     return null;
   }
@@ -427,5 +452,56 @@ export const updateMessageResponse = async ({ interactionId, response }) => {
   }
 };
 
+/**
+ * Update a team/user's assigned LLM model in the database
+ */
+export const updateTeamModel = async (teamName, newModel) => {
+  const client = getSupabaseClient();
+  if (!client || !teamName || !newModel) return false;
 
+  try {
+    const { error } = await client
+      .from('teams')
+      .update({ model: newModel })
+      .eq('team_name', teamName);
 
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.warn('Failed to update team model:', err);
+    return false;
+  }
+};
+
+// Alias for backward compatibility
+export const updateUserModel = updateTeamModel;
+
+/**
+ * Fetch all registered teams/users and their assigned models
+ */
+export const fetchAllTeams = async () => {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    const { data: teams, error } = await client
+      .from('teams')
+      .select('team_name, model, created_at')
+      .order('team_name', { ascending: true });
+
+    if (error) throw error;
+
+    return (teams || []).map((t) => ({
+      team_name: t.team_name,
+      username: t.team_name,
+      model: t.model || 'gemini-3.5-flash-lite',
+      created_at: t.created_at,
+    }));
+  } catch (err) {
+    console.warn('Failed to fetch teams:', err);
+    return [];
+  }
+};
+
+// Alias for backward compatibility
+export const fetchAllUsers = fetchAllTeams;
