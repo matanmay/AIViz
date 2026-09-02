@@ -68,11 +68,6 @@ npm start
 ## 👥 Participant Management
 
 Participants are added manually by the researcher — there is **no self-registration**.
-
-1. Go to **Supabase Dashboard → Authentication → Users → Add User**
-2. Enter the participant's email and a password
-3. Share the credentials with the participant securely
-
 ---
 
 ## 📊 Data Collection
