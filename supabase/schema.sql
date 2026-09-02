@@ -18,13 +18,6 @@ ALTER TABLE teams ADD COLUMN IF NOT EXISTS model TEXT NOT NULL DEFAULT 'gemini-3
 -- Clean up any redundant users table if previously created
 DROP TABLE IF EXISTS users CASCADE;
 
--- Seed default teams/users with requested designated LLMs
-INSERT INTO teams (team_name, password, model)
-VALUES 
-    ('demo', 'demo123', 'gemini-3.5-flash-lite'),
-    ('netta', 'netta123', 'gpt-5.6')
-ON CONFLICT (team_name) DO UPDATE SET model = EXCLUDED.model;
-
 -- 1. Create chats / conversation sessions table
 --    NOTE: id is TEXT to support JS-generated chat-<timestamp> IDs
 CREATE TABLE IF NOT EXISTS chats (
