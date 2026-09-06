@@ -116,3 +116,25 @@ CREATE POLICY "Allow public all on chat-attachments"
     TO public
     USING (bucket_id = 'chat-attachments')
     WITH CHECK (bucket_id = 'chat-attachments');
+
+-- 10. Table for student submitted final conceptual diagrams
+CREATE TABLE IF NOT EXISTS submitted_diagrams (
+    id TEXT PRIMARY KEY,
+    team_name TEXT REFERENCES teams(team_name) ON DELETE CASCADE,
+    chat_id TEXT REFERENCES chats(id) ON DELETE SET NULL,
+    session_title TEXT,
+    diagram_type TEXT NOT NULL,
+    plantuml_code TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_submitted_diagrams_team ON submitted_diagrams(team_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submitted_diagrams_type ON submitted_diagrams(diagram_type);
+
+ALTER TABLE submitted_diagrams ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all on submitted_diagrams" ON submitted_diagrams;
+CREATE POLICY "Allow all on submitted_diagrams"
+    ON submitted_diagrams FOR ALL
+    USING (true)
+    WITH CHECK (true);

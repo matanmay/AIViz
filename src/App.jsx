@@ -807,6 +807,7 @@ export default function App() {
           awaitingFeedback={awaitingFeedback}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          currentUser={currentUser}
         />
       </div>
     </div>

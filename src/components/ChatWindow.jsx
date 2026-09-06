@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Message from './Message';
 import MessageInput from './MessageInput';
+import SubmitDiagramModal from './SubmitDiagramModal';
 import { Bot, Edit3, Check, X, Download } from 'lucide-react';
 
 export default function ChatWindow({
@@ -20,10 +21,12 @@ export default function ChatWindow({
   isLoading,
   awaitingFeedback,
   onToggleSidebar,
+  currentUser,
 }) {
   const messagesEndRef = useRef(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [headerTitle, setHeaderTitle] = useState('');
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
 
   // Synchronize headerTitle when activeChat changes or title changes
   useEffect(() => {
@@ -281,8 +284,18 @@ export default function ChatWindow({
               ? '⭐ Please rate the response above before continuing...'
               : 'Write your prompt... (Enter to send, Shift+Enter for new line)'
           }
+          onSubmitDiagram={() => setIsSubmitModalOpen(true)}
         />
       </footer>
+
+      {/* Submit Diagram Modal */}
+      <SubmitDiagramModal
+        isOpen={isSubmitModalOpen}
+        onClose={() => setIsSubmitModalOpen(false)}
+        currentUser={currentUser}
+        activeChat={activeChat}
+        messages={messages}
+      />
     </div>
   );
 }

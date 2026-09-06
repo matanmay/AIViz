@@ -641,3 +641,56 @@ export const fetchAllTeams = async () => {
 
 // Alias for backward compatibility
 export const fetchAllUsers = fetchAllTeams;
+
+/**
+ * Submit a student diagram to the submitted_diagrams table in Supabase
+ */
+export const submitDiagramToSupabase = async ({
+  teamName,
+  chatId = null,
+  sessionTitle = null,
+  diagramType,
+  plantumlCode,
+}) => {
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  if (!teamName) {
+    throw new Error('Team name is required to submit a diagram.');
+  }
+
+  if (!diagramType || !plantumlCode?.trim()) {
+    throw new Error('Diagram type and PlantUML code are required.');
+  }
+
+  try {
+    const submissionId = `sub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const payload = {
+      id: submissionId,
+      team_name: teamName,
+      chat_id: chatId || null,
+      session_title: sessionTitle || null,
+      diagram_type: diagramType,
+      plantuml_code: plantumlCode.trim(),
+      created_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await client
+      .from('submitted_diagrams')
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('Supabase submit diagram error:', error.message);
+      throw error;
+    }
+
+    return data || payload;
+  } catch (err) {
+    console.warn('Failed to submit diagram to Supabase:', err);
+    throw err;
+  }
+};
