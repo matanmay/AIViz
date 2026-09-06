@@ -3,7 +3,7 @@ import Message from './Message';
 import MessageInput from './MessageInput';
 import SubmitDiagramModal from './SubmitDiagramModal';
 import FeedbackModal from './FeedbackModal';
-import { Bot, Edit3, Check, X, Download, AlertCircle } from 'lucide-react';
+import { Bot, Edit3, Check, X, Download, AlertCircle, ExternalLink } from 'lucide-react';
 
 export default function ChatWindow({
   activeChat,
@@ -31,6 +31,7 @@ export default function ChatWindow({
   const [feedbackTargetMessage, setFeedbackTargetMessage] = useState(null);
   const [submitWarning, setSubmitWarning] = useState(false);
   const [openSubmitAfterFeedback, setOpenSubmitAfterFeedback] = useState(false);
+  const [showUsabilityBanner, setShowUsabilityBanner] = useState(false);
 
   // Stable callback — avoids re-rendering React.memo(Message) on every keystroke
   const handleOpenFeedback = useCallback((targetMsg) => setFeedbackTargetMessage(targetMsg), []);
@@ -239,6 +240,35 @@ export default function ChatWindow({
         </div>
       </header>
 
+      {/* Usability Questionnaire Top Banner */}
+      {showUsabilityBanner && (
+        <div className="chat-usability-top-banner" role="alert">
+          <div className="chat-usability-top-content">
+            <span className="chat-usability-top-icon">📋</span>
+            <div className="chat-usability-top-text">
+              <span>Don't forget to fill out the individual usability questionnaire (one questionnaire per student) at:</span>{' '}
+              <a
+                href="https://forms.gle/BMu4wuELRLXaiVdW6"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="chat-usability-top-link"
+              >
+                <span>https://forms.gle/BMu4wuELRLXaiVdW6</span>
+                <ExternalLink size={13} />
+              </a>
+            </div>
+          </div>
+          <button
+            className="chat-usability-top-close"
+            onClick={() => setShowUsabilityBanner(false)}
+            title="Dismiss notice"
+            aria-label="Dismiss notice"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
       {/* Messages Scroll Area */}
       <main className="messages-scroll-area">
         {messages.length === 0 ? (
@@ -333,6 +363,7 @@ export default function ChatWindow({
         activeChat={activeChat}
         messages={messages}
         awaitingFeedback={awaitingFeedback}
+        onSubmitted={() => setShowUsabilityBanner(true)}
       />
 
       {/* Response Feedback Modal */}

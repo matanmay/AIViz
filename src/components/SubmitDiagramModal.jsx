@@ -83,6 +83,7 @@ export default function SubmitDiagramModal({
   initialCode = '',
   initialType = '',
   awaitingFeedback = false,
+  onSubmitted,
 }) {
   const [availableDiagrams, setAvailableDiagrams] = useState([]);
   const [selectedDiagramIndex, setSelectedDiagramIndex] = useState('custom');
@@ -247,6 +248,9 @@ export default function SubmitDiagramModal({
       });
 
       setSubmittedData(result);
+      if (onSubmitted) {
+        onSubmitted(result);
+      }
     } catch (err) {
       console.error('Submission error:', err);
       setErrorMessage(err.message || 'Failed to submit diagram. Please try again.');
@@ -301,6 +305,26 @@ export default function SubmitDiagramModal({
             <p className="submit-success-desc">
               Your <strong>{submittedData.diagram_type}</strong> has been saved to the database.
             </p>
+
+            {/* Usability Questionnaire Notice */}
+            <div className="submit-usability-banner">
+              <div className="submit-usability-badge">
+                <ExternalLink size={14} />
+                <span>Questionnaire Reminder</span>
+              </div>
+              <p className="submit-usability-text">
+                Don't forget to fill out the individual usability questionnaire (one questionnaire per student) at:
+              </p>
+              <a
+                href="https://forms.gle/BMu4wuELRLXaiVdW6"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="submit-usability-link"
+              >
+                <span>https://forms.gle/BMu4wuELRLXaiVdW6</span>
+                <ExternalLink size={13} />
+              </a>
+            </div>
 
             {/* Submitted Diagram Preview in Success Screen */}
             {previewUrl && (
