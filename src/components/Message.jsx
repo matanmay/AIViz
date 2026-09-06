@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Bot,
@@ -62,7 +62,8 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
   const initialKey = (code || '').trim();
   const [diagramUrl, setDiagramUrl] = useState(() => plantUmlUrlCache.get(initialKey) || null);
   const [fetchError, setFetchError] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // Start as false if URL is already cached — prevents flash on remount
+  const [loading, setLoading] = useState(() => !plantUmlUrlCache.has(initialKey));
   const [copied, setCopied] = useState(false);
   const [savedBadge, setSavedBadge] = useState(false);
 
@@ -644,16 +645,18 @@ function Message({
   const isUser = message.role === 'user';
   const isError = message.isError || message.role === 'error';
 
-  const handleCopyText = (text, type = 'text', language = null) => {
+  const onCopyRef = useRef(onCopy);
+  useEffect(() => { onCopyRef.current = onCopy; });
+
+  const handleCopyText = useCallback((text, type = 'text', language = null) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-
-    if (onCopy) {
-      onCopy({ content: text, contentType: type, language });
+    if (onCopyRef.current) {
+      onCopyRef.current({ content: text, contentType: type, language });
     }
-  };
+  }, []); // stable — onCopy read via ref
 
   const handleRate = (value) => {
     if (rating !== null) return; // already rated
@@ -672,7 +675,35 @@ function Message({
     }
   };
 
-  // Memoize markdown components to avoid destroying & remounting subcomponents on typing/hover
+  // Stable callback for saving edited PlantUML code — does NOT depend on message.content
+  // so it doesn't cause markdownComponents (and PlantUMLDiagram) to re-render when the
+  // user types in the prompt field.
+  const messageContentRef = useRef(message.content);
+  useEffect(() => {
+    messageContentRef.current = message.content;
+  });
+
+  const handleSaveCode = useCallback((codeContent, newCode) => {
+    if (!onUpdateMessage) return;
+    let content = messageContentRef.current;
+    const targetBlock = '```plantuml\n' + codeContent + '\n```';
+    if (content.includes(targetBlock)) {
+      content = content.replace(targetBlock, '```plantuml\n' + newCode + '\n```');
+    } else {
+      const escaped = codeContent.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp('```plantuml\\s*' + escaped + '\\s*```', 'g');
+      if (regex.test(content)) {
+        content = content.replace(regex, '```plantuml\n' + newCode + '\n```');
+      } else {
+        content = content.replace(/```plantuml[\s\S]*?```/, '```plantuml\n' + newCode + '\n```');
+      }
+    }
+    onUpdateMessage(message.id, content, { oldCode: codeContent, newCode });
+  }, [onUpdateMessage, message.id]); // intentionally excludes message.content — read via ref
+
+  // Memoize markdown components to avoid destroying & remounting subcomponents on typing.
+  // IMPORTANT: do NOT include message.content here — changes to it (e.g. from parent re-render
+  // caused by typing in the prompt) would destroy & remount PlantUMLDiagram, causing flicker.
   const markdownComponents = React.useMemo(
     () => ({
       p({ children }) {
@@ -683,46 +714,20 @@ function Message({
         const codeContent = String(children).replace(/\n$/, '');
         const lang = match ? match[1] : 'code';
 
-        if (!inline) {
+        // react-markdown v8 no longer reliably passes `inline`.
+        // A code element is a block if it has a language class OR spans multiple lines.
+        // Single-backtick inline code never has a language class and is always single-line.
+        const isBlock = typeof inline === 'boolean'
+          ? !inline                                 // v7 backward-compat
+          : !!match || codeContent.includes('\n');  // v8 detection
+
+        if (isBlock) {
           // ── PlantUML: render diagram + editable source ──
           if (lang === 'plantuml') {
             return (
               <PlantUMLDiagram
                 code={codeContent}
-                onSaveCode={(newCode) => {
-                  if (!onUpdateMessage) return;
-                  let newContent = message.content;
-                  const targetBlock = '```plantuml\n' + codeContent + '\n```';
-                  if (newContent.includes(targetBlock)) {
-                    newContent = newContent.replace(
-                      targetBlock,
-                      '```plantuml\n' + newCode + '\n```'
-                    );
-                  } else {
-                    const escaped = codeContent
-                      .trim()
-                      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const regex = new RegExp(
-                      '```plantuml\\s*' + escaped + '\\s*```',
-                      'g'
-                    );
-                    if (regex.test(newContent)) {
-                      newContent = newContent.replace(
-                        regex,
-                        '```plantuml\n' + newCode + '\n```'
-                      );
-                    } else {
-                      newContent = newContent.replace(
-                        /```plantuml[\s\S]*?```/,
-                        '```plantuml\n' + newCode + '\n```'
-                      );
-                    }
-                  }
-                  onUpdateMessage(message.id, newContent, {
-                    oldCode: codeContent,
-                    newCode,
-                  });
-                }}
+                onSaveCode={(newCode) => handleSaveCode(codeContent, newCode)}
               />
             );
           }
@@ -755,7 +760,9 @@ function Message({
         );
       },
     }),
-    [message.content, message.id, onUpdateMessage]
+    // Both deps are now stable useCallbacks with [] deps — markdownComponents will
+    // NEVER be recreated while the user is typing, preventing PlantUMLDiagram remounts.
+    [handleSaveCode, handleCopyText] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return (

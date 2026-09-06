@@ -714,42 +714,50 @@ export default function App() {
     setAwaitingFeedback(false);
   };
 
-  // Update message content (e.g. when PlantUML diagram is manually edited)
-  const handleUpdateMessage = (messageId, newContent, editDetails = null) => {
+  // Update message content (e.g. when PlantUML diagram is manually edited).
+  // Wrapped in useCallback so its reference is stable across re-renders caused by input typing —
+  // preventing unnecessary PlantUMLDiagram remounts (flickering).
+  const handleUpdateMessage = useCallback((messageId, newContent, editDetails = null) => {
     // 1. Update messages state so active conversation & next prompt context reflects the edited code
     setMessagesMap((prev) => {
-      const chatMsgs = prev[activeChatId] || [];
+      const chatId = activeChatIdRef.current;
+      const chatMsgs = prev[chatId] || [];
       return {
         ...prev,
-        [activeChatId]: chatMsgs.map((msg) =>
+        [chatId]: chatMsgs.map((msg) =>
           msg.id === messageId ? { ...msg, content: newContent } : msg
         ),
       };
     });
 
     // 2. If Supabase is configured and message has an interactionId, persist the change to DB
-    const chatMsgs = messagesMap[activeChatId] || [];
-    const targetMsg = chatMsgs.find((m) => m.id === messageId);
-    if (targetMsg?.interactionId && isSupabaseConfigured()) {
-      updateMessageResponse({
-        interactionId: targetMsg.interactionId,
-        response: newContent,
-      });
-    }
+    setMessagesMap((prev) => {
+      const chatId = activeChatIdRef.current;
+      const chatMsgs = prev[chatId] || [];
+      const targetMsg = chatMsgs.find((m) => m.id === messageId);
+      if (targetMsg?.interactionId && isSupabaseConfigured()) {
+        updateMessageResponse({
+          interactionId: targetMsg.interactionId,
+          response: newContent,
+        });
+      }
+      return prev; // no state change needed here, just side-effect
+    });
 
     // 3. Telemetry: log the manual edit event
-    if (currentUser) {
+    if (currentUserRef.current) {
       trackChatEvent({
         eventType: 'plantuml_code_edited',
-        chatId: activeChatId,
+        chatId: activeChatIdRef.current,
         details: {
           messageId,
           ...(editDetails || {}),
         },
-        user: currentUser,
+        user: currentUserRef.current,
       });
     }
-  };
+  }, []); // stable — reads activeChatId and currentUser via refs
+
 
   // Loading state while verifying session
   if (isAuthLoading) {

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Message from './Message';
 import MessageInput from './MessageInput';
 import SubmitDiagramModal from './SubmitDiagramModal';
@@ -29,6 +29,9 @@ export default function ChatWindow({
   const [headerTitle, setHeaderTitle] = useState('');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [feedbackTargetMessage, setFeedbackTargetMessage] = useState(null);
+
+  // Stable callback — avoids re-rendering React.memo(Message) on every keystroke
+  const handleOpenFeedback = useCallback((targetMsg) => setFeedbackTargetMessage(targetMsg), []);
 
   // Synchronize headerTitle when activeChat changes or title changes
   useEffect(() => {
@@ -237,7 +240,7 @@ export default function ChatWindow({
                 isLast={index === messages.length - 1}
                 onCopy={onCopy}
                 onRate={onRate}
-                onOpenFeedback={(targetMsg) => setFeedbackTargetMessage(targetMsg)}
+                onOpenFeedback={handleOpenFeedback}
                 onUpdateMessage={onUpdateMessage}
                 requiresFeedback={awaitingFeedback && index === messages.length - 1 && msg.role === 'assistant'}
                 onRetry={

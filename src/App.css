@@ -3717,24 +3717,81 @@
 }
 
 /* ==========================================================================
-   Feedback Modal (Material Design 3 Rating & Qualitative Notes)
+   Feedback Modal — Best Practice (MD3 + Emoji Rating)
    ========================================================================== */
+
+/* ── Container ── */
 .feedback-modal {
   background: var(--bg-primary, #1e293b);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-radius: var(--radius-lg, 16px);
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.1));
+  border-radius: 20px;
   width: 100%;
-  max-width: 580px;
+  max-width: 520px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 32px 64px -16px rgba(0,0,0,0.65),
+    0 0 0 1px rgba(255,255,255,0.05);
   overflow: hidden;
-  animation: modalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ── Header ── */
+.fm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 12px;
+}
+
+.fm-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Animated emoji hero — changes live as user hovers/selects */
+.fm-header-emoji {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+  transition: background 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+.fm-header-text {
+  min-width: 0;
+}
+
+.fm-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+  letter-spacing: -0.01em;
+}
+
+.fm-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Form body ── */
 .feedback-form {
-  padding: 18px 22px;
+  padding: 18px 20px 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -3742,41 +3799,43 @@
   flex: 1;
 }
 
+/* ── Error banner ── */
 .feedback-error-banner {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.28);
   color: #f87171;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+  padding: 9px 13px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  animation: slideUp 0.15s ease;
 }
 
-/* Message Preview in Modal */
+/* ── AI response preview ── */
 .feedback-message-preview {
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
+  background: var(--bg-secondary, rgba(255,255,255,0.03));
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md, 10px);
+  border-radius: 12px;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .feedback-message-preview .preview-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
 .feedback-message-preview .preview-author {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-weight: 600;
   color: #818cf8;
 }
@@ -3784,15 +3843,19 @@
 .feedback-message-preview .preview-body {
   font-size: 0.82rem;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.45;
   margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* Sections */
+/* ── Section layout ── */
 .feedback-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .feedback-section-header {
@@ -3810,126 +3873,224 @@
   gap: 6px;
 }
 
+.required-star {
+  color: #f87171;
+  font-weight: 700;
+}
+
 .feedback-optional-tag {
   font-size: 0.72rem;
   color: var(--text-muted);
   background: var(--bg-tertiary);
-  padding: 2px 7px;
-  border-radius: 6px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-weight: 500;
 }
 
-/* Rating Grid (1 to 5) */
-.feedback-rating-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+.fm-lang-hint {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.79rem;
+}
+
+/* ==========================================================================
+   Emoji Rating Row
+   ========================================================================== */
+.fm-emoji-row {
+  display: flex;
+  align-items: stretch;
   gap: 8px;
 }
 
-.rating-card-btn {
+.fm-emoji-btn {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 10px 4px;
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md, 10px);
+  gap: 6px;
+  padding: 12px 4px 10px;
+  background: var(--bg-secondary, rgba(255,255,255,0.03));
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.15s ease,
+    box-shadow 0.18s ease;
   color: var(--text-secondary);
   text-align: center;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.rating-card-btn:hover {
-  border-color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.08);
-  transform: translateY(-2px);
+.fm-emoji-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-3px);
   color: var(--text-primary);
 }
 
-.rating-card-btn.selected {
-  border-color: #818cf8;
+.fm-emoji-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Selected state: uses CSS custom properties injected per rating */
+.fm-emoji-btn.selected {
+  background: var(--rating-bg, rgba(99,102,241,0.12));
+  border-color: var(--rating-color, #818cf8);
   border-width: 2px;
-  background: rgba(99, 102, 241, 0.16);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rating-color, #818cf8) 20%, transparent);
+  transform: translateY(-3px) scale(1.03);
   color: var(--text-primary);
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
-  transform: translateY(-2px);
 }
 
-.rating-emoji {
-  font-size: 24px;
+.fm-emoji-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* The emoji glyph itself */
+.fm-emoji {
+  font-size: 28px;
   line-height: 1;
-  margin-bottom: 4px;
+  display: block;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.rating-score {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--text-primary);
+.fm-emoji-btn:hover:not(:disabled) .fm-emoji,
+.fm-emoji-btn.selected .fm-emoji {
+  transform: scale(1.18);
 }
 
-.rating-label {
-  font-size: 0.72rem;
+/* The text label below emoji */
+.fm-emoji-label {
+  font-size: 0.68rem;
   font-weight: 600;
-  margin-top: 2px;
+  line-height: 1.2;
+  color: inherit;
+  white-space: nowrap;
 }
 
-.rating-desc {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  margin-top: 1px;
-  display: none;
+/* ── Selection confirmation strip (appears below emoji row) ── */
+.fm-selection-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  font-size: 0.81rem;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-@media (min-width: 520px) {
-  .rating-desc {
-    display: block;
-  }
+.fm-selection-strip.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-/* Comment Textarea */
+.fm-strip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.fm-strip-text {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+/* ==========================================================================
+   Comment Textarea
+   ========================================================================== */
 .feedback-comment-textarea {
-  background: #0d1117;
-  color: #c9d1d9;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 10px;
   padding: 10px 12px;
   font-family: inherit;
   font-size: 0.86rem;
   line-height: 1.5;
   resize: vertical;
   min-height: 80px;
+  width: 100%;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
 }
 
 .feedback-comment-textarea:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.18);
+}
+
+.feedback-comment-textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .textarea-footer {
   display: flex;
   justify-content: flex-end;
+  margin-top: -4px;
 }
 
 .textarea-char-count {
   font-size: 0.72rem;
   color: var(--text-muted);
+  transition: color 0.2s ease;
 }
 
-/* Modal Footer & Buttons */
-.feedback-modal-footer {
+.textarea-char-count.near { color: #f59e0b; }
+.textarea-char-count.over { color: #ef4444; font-weight: 600; }
+
+/* ==========================================================================
+   Footer & Action Buttons
+   ========================================================================== */
+.fm-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 14px 22px;
+  gap: 10px;
+  padding: 14px 20px;
   border-top: 1px solid var(--border-subtle);
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.02));
+  background: rgba(255,255,255,0.02);
   flex-shrink: 0;
+  margin-top: 4px;
 }
 
+/* MD3 text / cancel button */
+.material-cancel-btn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'Roboto', 'Google Sans', var(--font-main);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.material-cancel-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+}
+
+.material-cancel-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* MD3 filled submit button */
 .feedback-submit-btn {
   display: inline-flex;
   align-items: center;
@@ -3938,31 +4099,52 @@
   height: 38px;
   padding: 0 22px;
   border-radius: 20px;
-  background-color: #6750a4; /* MD3 Primary */
-  color: #ffffff;
+  background-color: #6750a4;
+  color: #fff;
   font-family: 'Roboto', 'Google Sans', var(--font-main);
   font-size: 0.875rem;
   font-weight: 500;
   letter-spacing: 0.1px;
   border: none;
   cursor: pointer;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.15);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  white-space: nowrap;
 }
 
 .feedback-submit-btn:hover:not(:disabled) {
   background-color: #7965b2;
-  box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.25), 0 6px 10px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25), 0 6px 10px rgba(0,0,0,0.15);
   transform: translateY(-1px);
 }
 
 .feedback-submit-btn:active:not(:disabled) {
   background-color: #5b4396;
   transform: scale(0.98);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
-.feedback-submit-btn:disabled {
+.feedback-submit-btn:disabled:not(.submitted) {
   opacity: 0.38;
   cursor: not-allowed;
   box-shadow: none;
+  transform: none;
 }
+
+/* ✅ Success flash */
+.feedback-submit-btn.submitted {
+  background-color: #22c55e;
+  box-shadow: 0 2px 10px rgba(34,197,94,0.4);
+  cursor: default;
+}
+
+/* Spinner animation */
+.spin {
+  animation: spinAnim 0.9s linear infinite;
+}
+
+@keyframes spinAnim {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
