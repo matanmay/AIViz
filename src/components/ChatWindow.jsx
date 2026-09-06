@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Message from './Message';
 import MessageInput from './MessageInput';
-import { Bot, Edit3, Check, X } from 'lucide-react';
+import { Bot, Edit3, Check, X, Download } from 'lucide-react';
 
 export default function ChatWindow({
   activeChat,
@@ -11,6 +11,7 @@ export default function ChatWindow({
   onSend,
   onRetry,
   onRenameChat,
+  onExportChat,
   onCopy,
   onRate,
   onUpdateMessage,
@@ -46,6 +47,58 @@ export default function ChatWindow({
   const handleCancelEditing = () => {
     setHeaderTitle(activeChat?.title || 'New Session');
     setIsEditingTitle(false);
+  };
+
+  // Helper to safely escape CSV cells (RFC 4180)
+  const escapeCsvCell = (val) => {
+    if (val == null) return '""';
+    const str = String(val);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
+  // Export current chat messages to CSV file
+  const handleExportCsv = () => {
+    if (!messages || messages.length === 0) {
+      alert('There are no messages in this session to export.');
+      return;
+    }
+
+    const headers = ['Session ID', 'Session Title', 'Message ID', 'Timestamp', 'Role', 'Content', 'Rating'];
+    const rows = messages.map((msg) => [
+      activeChat?.id || '',
+      activeChat?.title || 'New Session',
+      msg.id || '',
+      msg.timestamp || '',
+      msg.role || '',
+      msg.content || '',
+      msg.userRating != null ? msg.userRating : '',
+    ]);
+
+    // Prepend UTF-8 BOM (\uFEFF) so Excel opens Hebrew and UTF-8 characters cleanly
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map((row) => row.map(escapeCsvCell).join(','))
+        .join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const sanitizedTitle = (activeChat?.title || 'session')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, '_')
+      .trim();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${sanitizedTitle || 'chat'}_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    if (onExportChat && activeChat?.id) {
+      onExportChat(activeChat.id, messages.length);
+    }
   };
 
   // Auto-scroll to bottom whenever messages change or loading state triggers
@@ -129,6 +182,16 @@ export default function ChatWindow({
         </div>
 
         <div className="header-right">
+          <button
+            className="export-chat-btn"
+            onClick={handleExportCsv}
+            disabled={messages.length === 0}
+            title={messages.length === 0 ? 'No messages to export' : 'Export conversation to CSV'}
+            aria-label="Export conversation to CSV"
+          >
+            <Download size={15} />
+            <span>Export CSV</span>
+          </button>
         </div>
       </header>
 

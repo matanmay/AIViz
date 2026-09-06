@@ -636,6 +636,18 @@ export default function App() {
     });
   };
 
+  // Telemetry: Track Chat Export
+  const handleExportChatTelemetry = (chatId, messageCount) => {
+    if (currentUser) {
+      trackChatEvent({
+        eventType: 'chat_exported',
+        chatId,
+        details: { message_count: messageCount, format: 'csv' },
+        user: currentUser,
+      });
+    }
+  };
+
   // Telemetry: Track Starter Prompt Click
   const handleSelectSuggestedPrompt = (promptTitle, promptText) => {
     trackSuggestedPromptClicked({
@@ -754,6 +766,7 @@ export default function App() {
           onSend={handleSend}
           onRetry={handleRetry}
           onRenameChat={handleRenameChat}
+          onExportChat={handleExportChatTelemetry}
           onCopy={handleCopyTelemetry}
           onRate={handleFeedbackRating}
           onUpdateMessage={handleUpdateMessage}

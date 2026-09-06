@@ -949,6 +949,36 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+.export-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.export-chat-btn:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(59, 130, 246, 0.12));
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.export-chat-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.export-chat-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 /* Messages Scroll Area */
 .messages-scroll-area {
   flex: 1;
