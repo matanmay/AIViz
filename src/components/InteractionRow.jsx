@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { Bot, User, Copy, Check, RotateCcw, Clock, Loader2 } from 'lucide-react';
 
 /**
@@ -107,7 +111,16 @@ export default function InteractionRow({
           ) : assistantMessage ? (
             <div className="markdown-content response-markdown">
               <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeRaw, rehypeKatex]}
                 components={{
+                  table({ children }) {
+                    return (
+                      <div className="table-responsive-wrapper">
+                        <table className="markdown-table">{children}</table>
+                      </div>
+                    );
+                  },
                   code({ node, inline, className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '');
                     const codeContent = String(children).replace(/\n$/, '');

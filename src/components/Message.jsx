@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import {
   Bot,
   User,
@@ -739,6 +743,13 @@ function Message({
   // caused by typing in the prompt) would destroy & remount PlantUMLDiagram, causing flicker.
   const markdownComponents = React.useMemo(
     () => ({
+      table({ children }) {
+        return (
+          <div className="table-responsive-wrapper">
+            <table className="markdown-table">{children}</table>
+          </div>
+        );
+      },
       p({ children }) {
         return <div className="markdown-paragraph">{children}</div>;
       },
@@ -867,7 +878,11 @@ function Message({
               </div>
             ) : (
               <div className="markdown-content">
-                <ReactMarkdown components={markdownComponents}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]}
+                  components={markdownComponents}
+                >
                   {message.content}
                 </ReactMarkdown>
               </div>
