@@ -689,25 +689,28 @@ export default function App() {
     });
   };
 
-  // Telemetry + DB: Track 1-5 Feedback Rating and persist to messages table
-  const handleFeedbackRating = ({ rating, messageId, interactionId }) => {
-    // Store the rating on the message object in state so it survives re-renders
+  // Telemetry + DB: Track 1-5 Feedback Rating and comments, and persist to messages table
+  const handleFeedbackRating = ({ rating, comment = null, messageId, interactionId }) => {
+    // Store the rating and comment on the message object in state so it survives re-renders
     setMessagesMap((prev) => {
       const chatMsgs = prev[activeChatId] || [];
       return {
         ...prev,
         [activeChatId]: chatMsgs.map((msg) =>
-          msg.id === messageId ? { ...msg, userRating: rating } : msg
+          msg.id === messageId
+            ? { ...msg, userRating: rating, feedbackComment: comment }
+            : msg
         ),
       };
     });
     trackFeedbackRating({
       rating,
+      comment,
       messageId,
       chatId: activeChatId,
       user: currentUser,
     });
-    updateMessageFeedback({ interactionId, rating });
+    updateMessageFeedback({ interactionId, rating, comment });
     setAwaitingFeedback(false);
   };
 

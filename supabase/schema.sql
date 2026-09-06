@@ -97,6 +97,7 @@ CREATE POLICY "Allow all on experiment_logs"
 
 -- 7. Migration: add feedback columns to existing messages table (safe to re-run)
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_comment TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_at TIMESTAMP WITH TIME ZONE;
 
 -- 8. Migration: add attachment columns to messages table (safe to re-run)

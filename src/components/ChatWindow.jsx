@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import Message from './Message';
 import MessageInput from './MessageInput';
 import SubmitDiagramModal from './SubmitDiagramModal';
+import FeedbackModal from './FeedbackModal';
 import { Bot, Edit3, Check, X, Download } from 'lucide-react';
 
 export default function ChatWindow({
@@ -27,6 +28,7 @@ export default function ChatWindow({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [headerTitle, setHeaderTitle] = useState('');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [feedbackTargetMessage, setFeedbackTargetMessage] = useState(null);
 
   // Synchronize headerTitle when activeChat changes or title changes
   useEffect(() => {
@@ -75,6 +77,7 @@ export default function ChatWindow({
       'Content',
       'Attachment',
       'Rating',
+      'Feedback Notes',
     ];
     const rows = messages.map((msg) => [
       activeChat?.id || '',
@@ -87,6 +90,7 @@ export default function ChatWindow({
         ? `${msg.attachment.name || 'file'}${msg.attachment.url ? ` (${msg.attachment.url})` : ''}`
         : '',
       msg.userRating != null ? msg.userRating : '',
+      msg.feedbackComment || '',
     ]);
 
     // Prepend UTF-8 BOM (\uFEFF) so Excel opens Hebrew and UTF-8 characters cleanly
@@ -233,6 +237,7 @@ export default function ChatWindow({
                 isLast={index === messages.length - 1}
                 onCopy={onCopy}
                 onRate={onRate}
+                onOpenFeedback={(targetMsg) => setFeedbackTargetMessage(targetMsg)}
                 onUpdateMessage={onUpdateMessage}
                 requiresFeedback={awaitingFeedback && index === messages.length - 1 && msg.role === 'assistant'}
                 onRetry={
@@ -295,6 +300,19 @@ export default function ChatWindow({
         currentUser={currentUser}
         activeChat={activeChat}
         messages={messages}
+      />
+
+      {/* Response Feedback Modal */}
+      <FeedbackModal
+        isOpen={Boolean(feedbackTargetMessage)}
+        onClose={() => setFeedbackTargetMessage(null)}
+        onSubmit={async ({ rating, comment, messageId, interactionId }) => {
+          if (onRate) {
+            await onRate({ rating, comment, messageId, interactionId });
+          }
+        }}
+        targetMessage={feedbackTargetMessage}
+        currentUser={currentUser}
       />
     </div>
   );

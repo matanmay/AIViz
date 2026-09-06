@@ -18,6 +18,7 @@ import {
   X,
   Scan,
   Paperclip,
+  Star,
 } from 'lucide-react';
 
 // Global in-memory cache for rendered PlantUML image URLs
@@ -630,6 +631,7 @@ function Message({
   onRetry,
   onCopy,
   onRate,
+  onOpenFeedback,
   onUpdateMessage,
   isLast,
   requiresFeedback,
@@ -861,30 +863,61 @@ function Message({
           {!isUser && !isError && (
             <div className={`feedback-rating ${requiresFeedback ? 'feedback-required' : ''}`}>
               {rating === null ? (
-                <>
+                <div className="feedback-unrated-bar">
                   <span className="feedback-label">Was this helpful?</span>
-                  <div className="feedback-emojis">
-                    {RATINGS.map(({ value, emoji, label }) => (
-                      <button
-                        key={value}
-                        className={`feedback-emoji-btn ${hovered === value ? 'hovered' : ''}`}
-                        onClick={() => handleRate(value)}
-                        onMouseEnter={() => setHovered(value)}
-                        onMouseLeave={() => setHovered(null)}
-                        title={label}
-                        aria-label={`Rate ${value} - ${label}`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+                  <div className="feedback-actions-row">
+                    <button
+                      type="button"
+                      className={`feedback-open-modal-btn ${requiresFeedback ? 'pulse-prompt' : ''}`}
+                      onClick={() => onOpenFeedback && onOpenFeedback(message)}
+                      title="Rate this response and provide comments"
+                      aria-label="Give feedback on response"
+                    >
+                      <Star size={13} className="text-warning-star" />
+                      <span>Give Feedback</span>
+                    </button>
+                    <div className="feedback-emojis">
+                      {RATINGS.map(({ value, emoji, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`feedback-emoji-btn ${hovered === value ? 'hovered' : ''}`}
+                          onClick={() => {
+                            if (onOpenFeedback) {
+                              onOpenFeedback({ ...message, userRating: value });
+                            } else {
+                              handleRate(value);
+                            }
+                          }}
+                          onMouseEnter={() => setHovered(value)}
+                          onMouseLeave={() => setHovered(null)}
+                          title={`${label} - Click to rate & add comments`}
+                          aria-label={`Rate ${value} - ${label}`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </>
+                </div>
               ) : (
-                <div className="feedback-submitted">
+                <div
+                  className="feedback-submitted-pill"
+                  onClick={() => onOpenFeedback && onOpenFeedback(message)}
+                  title="Click to edit rating or feedback comments"
+                >
                   <span className="feedback-submitted-emoji">
                     {RATINGS.find((r) => r.value === rating)?.emoji}
                   </span>
-                  <span className="feedback-submitted-text">Thanks for your feedback!</span>
+                  <span className="feedback-submitted-score">{rating} / 5</span>
+                  {message.feedbackComment && (
+                    <span className="feedback-submitted-notes" title={message.feedbackComment}>
+                      "{message.feedbackComment.length > 45 ? message.feedbackComment.slice(0, 45) + '...' : message.feedbackComment}"
+                    </span>
+                  )}
+                  <span className="feedback-edit-hint">
+                    <Edit3 size={11} />
+                  </span>
                 </div>
               )}
             </div>

@@ -464,8 +464,9 @@ export const fetchMessagesFromSupabase = async (chatId) => {
           content: row.response,
           timestamp: row.response_at || row.created_at,
           tokens: row.tokens,
-          // Restore rating and interaction reference from DB
+          // Restore rating, comment and interaction reference from DB
           userRating: row.feedback_rating ?? null,
+          feedbackComment: row.feedback_comment ?? null,
           interactionId: row.id,
         });
       }
@@ -527,7 +528,7 @@ export const clearAllChatsFromSupabase = async (teamName = null) => {
  * interactionId is the user message's ID, which is the DB row ID in the
  * messages table (one row per prompt+response interaction).
  */
-export const updateMessageFeedback = async ({ interactionId, rating }) => {
+export const updateMessageFeedback = async ({ interactionId, rating, comment = null }) => {
   const client = getSupabaseClient();
   if (!client) return false;
 
@@ -537,15 +538,35 @@ export const updateMessageFeedback = async ({ interactionId, rating }) => {
   }
 
   try {
+    const updatePayload = {
+      feedback_rating: rating,
+      feedback_comment: comment || null,
+      feedback_at: new Date().toISOString(),
+    };
+
     const { error } = await client
       .from('messages')
-      .update({
-        feedback_rating: rating,
-        feedback_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', interactionId);
 
     if (error) {
+      // Fallback if feedback_comment column doesn't exist in DB schema yet
+      if (error.message?.includes('feedback_comment') || error.code === 'PGRST204') {
+        const { error: fallbackError } = await client
+          .from('messages')
+          .update({
+            feedback_rating: rating,
+            feedback_at: new Date().toISOString(),
+          })
+          .eq('id', interactionId);
+
+        if (fallbackError) {
+          console.warn('Supabase feedback fallback update error:', fallbackError.message);
+          return false;
+        }
+        return true;
+      }
+
       console.warn('Supabase feedback update error:', error.message);
       return false;
     }
