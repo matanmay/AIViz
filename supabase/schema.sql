@@ -98,3 +98,21 @@ CREATE POLICY "Allow all on experiment_logs"
 -- 7. Migration: add feedback columns to existing messages table (safe to re-run)
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5);
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS feedback_at TIMESTAMP WITH TIME ZONE;
+
+-- 8. Migration: add attachment columns to messages table (safe to re-run)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_data TEXT;
+
+-- 9. Storage Bucket for uploaded diagrams / chat attachments (safe to re-run)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('chat-attachments', 'chat-attachments', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DROP POLICY IF EXISTS "Allow public all on chat-attachments" ON storage.objects;
+CREATE POLICY "Allow public all on chat-attachments"
+    ON storage.objects FOR ALL
+    TO public
+    USING (bucket_id = 'chat-attachments')
+    WITH CHECK (bucket_id = 'chat-attachments');

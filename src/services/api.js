@@ -178,6 +178,47 @@ export const sendChatMessage = async ({
   let choice = null;
   let totalTokens = null;
 
+  // Format messages (OpenAI-compatible schema with multimodal image support)
+  const formattedMessages = [
+    { role: 'system', content: effectiveSystemPrompt },
+    ...messages
+      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg) => {
+        if (
+          msg.attachment &&
+          (msg.attachment.type?.startsWith('image/') ||
+            msg.attachment.dataUrl?.startsWith('data:image/') ||
+            msg.attachment.url?.match(/\.(jpeg|jpg|png|webp|gif|svg)/i))
+        ) {
+          return {
+            role: msg.role,
+            content: [
+              {
+                type: 'text',
+                text: msg.content || 'Please analyze this diagram/image for conceptual modeling.',
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: msg.attachment.dataUrl || msg.attachment.url,
+                },
+              },
+            ],
+          };
+        }
+        if (msg.attachment) {
+          return {
+            role: msg.role,
+            content: `${msg.content || ''}\n\n[Attached File: ${msg.attachment.name}]`.trim(),
+          };
+        }
+        return {
+          role: msg.role,
+          content: msg.content,
+        };
+      }),
+  ];
+
   // 1. Try Supabase Edge Function first (recommended — keeps API key completely hidden from client DevTools)
   const supabase = getSupabaseClient();
   let usedEdgeFunction = false;
@@ -186,7 +227,7 @@ export const sendChatMessage = async ({
     try {
       const { data, error } = await supabase.functions.invoke('chat', {
         body: {
-          messages,
+          messages: formattedMessages,
           model: effectiveModel,
           systemPrompt: effectiveSystemPrompt,
           temperature: 0.7,
@@ -226,16 +267,6 @@ export const sendChatMessage = async ({
         `No API key configured for model "${effectiveModel}". Please set the appropriate API key in Supabase Edge Function secrets, or add an API key in .env / Settings.`
       );
     }
-
-    const formattedMessages = [
-      { role: 'system', content: effectiveSystemPrompt },
-      ...messages
-        .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
-        .map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-    ];
 
     try {
       const response = await axios.post(

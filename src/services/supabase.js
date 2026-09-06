@@ -239,6 +239,50 @@ export const logMessageToSupabase = async (message, teamName = null) => {
 };
 
 /**
+ * Upload a file/image attachment to Supabase Storage.
+ * Attempts to upload to 'chat-attachments' bucket.
+ * Returns { url, path, name, type, size } on success, or null if storage is not available.
+ */
+export const uploadAttachmentToSupabase = async (file, teamName = null) => {
+  const client = getSupabaseClient();
+  if (!client || !file) return null;
+
+  try {
+    const timestamp = Date.now();
+    const cleanName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const folder = (teamName || 'general').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${folder}/${timestamp}_${cleanName}`;
+
+    const { error } = await client.storage
+      .from('chat-attachments')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (error) {
+      console.warn('Supabase storage upload notice:', error.message);
+      return null;
+    }
+
+    const { data: publicData } = client.storage
+      .from('chat-attachments')
+      .getPublicUrl(filePath);
+
+    return {
+      url: publicData?.publicUrl || null,
+      path: filePath,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    };
+  } catch (err) {
+    console.warn('Notice: Supabase storage upload skipped:', err.message);
+    return null;
+  }
+};
+
+/**
  * Log a complete interaction (User query + Assistant response) as ONE row.
  * Uses the user message ID as the interaction row ID.
  * If the row already exists (user prompt saved first), upserts with response data.
@@ -284,13 +328,61 @@ export const logCompleteInteraction = async ({
       payload.tokens = assistantMessage.tokens || null;
     }
 
-    const { error } = await client
+    // Attach file/image metadata if present
+    if (userMessage.attachment) {
+      payload.attachment_url = userMessage.attachment.url || null;
+      payload.attachment_name = userMessage.attachment.name || null;
+      payload.attachment_type = userMessage.attachment.type || null;
+      if (userMessage.attachment.dataUrl && userMessage.attachment.dataUrl.length < 500000) {
+        payload.attachment_data = userMessage.attachment.dataUrl;
+      }
+    }
+
+    let { error } = await client
       .from('messages')
       .upsert(payload, { onConflict: 'id' });
+
+    // Fallback: if schema doesn't have attachment columns yet, retry without them so message logging never fails
+    if (error && userMessage.attachment && (error.message?.includes('column') || error.code === 'PGRST204')) {
+      const basicPayload = { ...payload };
+      delete basicPayload.attachment_url;
+      delete basicPayload.attachment_name;
+      delete basicPayload.attachment_type;
+      delete basicPayload.attachment_data;
+      const retryResult = await client
+        .from('messages')
+        .upsert(basicPayload, { onConflict: 'id' });
+      error = retryResult.error;
+    }
 
     if (error) {
       console.warn('Supabase interaction log error:', error.message, error.details);
       return false;
+    }
+
+    // Always log attachment event to experiment_logs (accepts arbitrary JSON)
+    if (userMessage.attachment) {
+      try {
+        await client.from('experiment_logs').insert([
+          {
+            id: `evt-att-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            team_name: teamName,
+            chat_id: chatId,
+            event_type: 'file_attached',
+            event_data: {
+              messageId: userMessage.id,
+              fileName: userMessage.attachment.name,
+              fileType: userMessage.attachment.type,
+              fileSize: userMessage.attachment.size,
+              url: userMessage.attachment.url,
+              hasDataUrl: Boolean(userMessage.attachment.dataUrl),
+            },
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      } catch (logErr) {
+        console.warn('Failed to log attachment telemetry:', logErr);
+      }
     }
 
     return true;
@@ -347,13 +439,24 @@ export const fetchMessagesFromSupabase = async (chatId) => {
     // Expand each interaction row into a pair of message objects
     const expanded = [];
     for (const row of data) {
-      expanded.push({
+      const userMsg = {
         id: row.id,
         role: 'user',
         content: row.prompt,
         timestamp: row.prompt_at || row.created_at,
         tokens: null,
-      });
+      };
+
+      if (row.attachment_url || row.attachment_name || row.attachment_data) {
+        userMsg.attachment = {
+          url: row.attachment_url,
+          name: row.attachment_name,
+          type: row.attachment_type,
+          dataUrl: row.attachment_data || row.attachment_url,
+        };
+      }
+      expanded.push(userMsg);
+
       if (row.response) {
         expanded.push({
           id: `${row.id}-response`,

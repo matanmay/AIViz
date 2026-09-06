@@ -17,6 +17,7 @@ import {
   Download,
   X,
   Scan,
+  Paperclip,
 } from 'lucide-react';
 
 // Global in-memory cache for rendered PlantUML image URLs
@@ -792,7 +793,36 @@ function Message({
                 )}
               </div>
             ) : isUser ? (
-              <p className="user-text">{message.content}</p>
+              <div className="user-message-body">
+                {message.attachment && (
+                  <div className="message-attachment-card">
+                    {message.attachment.type?.startsWith('image/') ||
+                    message.attachment.dataUrl?.startsWith('data:image/') ||
+                    message.attachment.url?.match(/\.(jpeg|jpg|png|webp|gif|svg)/i) ? (
+                      <div className="message-attachment-image-wrapper">
+                        <img
+                          src={message.attachment.dataUrl || message.attachment.url}
+                          alt={message.attachment.name || 'Attachment'}
+                          className="message-attached-image"
+                          onClick={() =>
+                            window.open(
+                              message.attachment.url || message.attachment.dataUrl,
+                              '_blank'
+                            )
+                          }
+                          title="Click to view full size in new tab"
+                        />
+                      </div>
+                    ) : (
+                      <div className="message-attachment-file-badge">
+                        <Paperclip size={14} />
+                        <span className="file-name">{message.attachment.name}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {message.content && <p className="user-text">{message.content}</p>}
+              </div>
             ) : (
               <div className="markdown-content">
                 <ReactMarkdown components={markdownComponents}>

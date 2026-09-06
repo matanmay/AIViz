@@ -8,6 +8,7 @@ import { sendChatMessage } from './services/api';
 import {
   syncChatToSupabase,
   updateChatTitleInSupabase,
+  uploadAttachmentToSupabase,
   fetchChatsFromSupabase,
   fetchMessagesFromSupabase,
   isSupabaseConfigured,
@@ -484,18 +485,47 @@ export default function App() {
     }
   };
 
-  // Send message handler (with drafting duration telemetry)
-  const handleSend = async (draftingDurationMs = 0) => {
-    if (!input.trim() || isLoading) return;
+  // Send message handler (with drafting duration telemetry & optional file attachment)
+  const handleSend = async (draftingDurationMs = 0, attachment = null) => {
+    if ((!input.trim() && !attachment) || isLoading) return;
 
     const userPrompt = input.trim();
     setInput('');
+
+    // If an attachment is provided, try uploading to Supabase Storage
+    let processedAttachment = attachment;
+    if (attachment && attachment.file && isSupabaseConfigured()) {
+      try {
+        const uploadResult = await uploadAttachmentToSupabase(
+          attachment.file,
+          currentUser?.team_name
+        );
+        if (uploadResult?.url) {
+          processedAttachment = {
+            ...attachment,
+            url: uploadResult.url,
+            path: uploadResult.path,
+          };
+        }
+      } catch (uploadErr) {
+        console.warn('Supabase storage upload fallback to local dataUrl:', uploadErr);
+      }
+    }
 
     const userMessage = {
       id: `usr-${Date.now()}`,
       role: 'user',
       content: userPrompt,
       timestamp: new Date().toISOString(),
+      attachment: processedAttachment
+        ? {
+            name: processedAttachment.name,
+            type: processedAttachment.type,
+            size: processedAttachment.size,
+            url: processedAttachment.url || processedAttachment.dataUrl,
+            dataUrl: processedAttachment.dataUrl,
+          }
+        : null,
     };
 
     const updatedMessages = [...currentMessages, userMessage];
@@ -509,7 +539,8 @@ export default function App() {
     // Auto-update chat title if it's the first message and no custom title was set
     let currentTitle = activeChat?.title || 'New Session';
     if (!activeChat?.isCustomTitle && (currentMessages.length === 0 || currentTitle === 'New Session')) {
-      const generatedTitle = userPrompt.slice(0, 36) + (userPrompt.length > 36 ? '...' : '');
+      const titleSource = userPrompt || (processedAttachment ? `Image: ${processedAttachment.name}` : 'New Session');
+      const generatedTitle = titleSource.slice(0, 36) + (titleSource.length > 36 ? '...' : '');
       currentTitle = generatedTitle;
       setChats((prev) =>
         prev.map((c) => (c.id === activeChatId ? { ...c, title: generatedTitle } : c))
@@ -518,7 +549,7 @@ export default function App() {
 
     // Telemetry: Track prompt submission & drafting time
     trackPromptSent({
-      prompt: userPrompt,
+      prompt: userPrompt || (processedAttachment ? `[Attachment: ${processedAttachment.name}]` : ''),
       draftingDurationMs,
       chatId: activeChatId,
       user: currentUser,

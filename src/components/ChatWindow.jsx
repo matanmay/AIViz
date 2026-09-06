@@ -63,7 +63,16 @@ export default function ChatWindow({
       return;
     }
 
-    const headers = ['Session ID', 'Session Title', 'Message ID', 'Timestamp', 'Role', 'Content', 'Rating'];
+    const headers = [
+      'Session ID',
+      'Session Title',
+      'Message ID',
+      'Timestamp',
+      'Role',
+      'Content',
+      'Attachment',
+      'Rating',
+    ];
     const rows = messages.map((msg) => [
       activeChat?.id || '',
       activeChat?.title || 'New Session',
@@ -71,6 +80,9 @@ export default function ChatWindow({
       msg.timestamp || '',
       msg.role || '',
       msg.content || '',
+      msg.attachment
+        ? `${msg.attachment.name || 'file'}${msg.attachment.url ? ` (${msg.attachment.url})` : ''}`
+        : '',
       msg.userRating != null ? msg.userRating : '',
     ]);
 

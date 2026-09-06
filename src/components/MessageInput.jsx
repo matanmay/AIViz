@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ArrowUp, Loader2 } from 'lucide-react';
+import { ArrowUp, Loader2, Paperclip, X, Image as ImageIcon } from 'lucide-react';
 
 export default function MessageInput({
   input,
@@ -10,7 +10,9 @@ export default function MessageInput({
   disabled = false,
 }) {
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [typingStartTime, setTypingStartTime] = useState(null);
+  const [attachment, setAttachment] = useState(null);
 
   // Auto-resize textarea to fit content
   useEffect(() => {
@@ -30,11 +32,66 @@ export default function MessageInput({
     setInput(e.target.value);
   };
 
+  // Process file into attachment state with dataUrl
+  const processFile = (file) => {
+    if (!file) return;
+
+    // Read as Data URL for preview and multimodal AI payload
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setAttachment({
+        file,
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        dataUrl: e.target?.result,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  // Support pasting images from clipboard (e.g. screenshots)
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          processFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachment(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleTriggerSend = () => {
-    if (!isLoading && input.trim() && !disabled) {
+    const hasText = Boolean(input.trim());
+    const hasAttachment = Boolean(attachment);
+
+    if (!isLoading && (hasText || hasAttachment) && !disabled) {
       const draftingDurationMs = typingStartTime ? Date.now() - typingStartTime : 0;
       setTypingStartTime(null);
-      onSend(draftingDurationMs);
+      const currentAttachment = attachment;
+      setAttachment(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      onSend(draftingDurationMs, currentAttachment);
     }
   };
 
@@ -50,15 +107,73 @@ export default function MessageInput({
     handleTriggerSend();
   };
 
+  const canSend = (input.trim() || attachment) && !isLoading && !disabled;
+
   return (
     <form className="message-input-form" onSubmit={handleSubmit}>
       <div className="input-container">
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="image/*,.png,.jpg,.jpeg,.webp,.svg,.gif,.pdf,.txt,.json,.uml,.puml"
+          style={{ display: 'none' }}
+        />
+
+        {/* Attachment Preview Bar */}
+        {attachment && (
+          <div className="attachment-preview-container">
+            {attachment.type?.startsWith('image/') || attachment.dataUrl?.startsWith('data:image/') ? (
+              <div className="attachment-thumb-group">
+                <img
+                  src={attachment.dataUrl}
+                  alt={attachment.name}
+                  className="attachment-thumbnail"
+                />
+                <div className="attachment-meta">
+                  <span className="attachment-name" title={attachment.name}>
+                    {attachment.name}
+                  </span>
+                  <span className="attachment-size">
+                    {(attachment.size / 1024).toFixed(1)} KB
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="attachment-thumb-group">
+                <div className="attachment-file-icon">
+                  <Paperclip size={16} />
+                </div>
+                <div className="attachment-meta">
+                  <span className="attachment-name" title={attachment.name}>
+                    {attachment.name}
+                  </span>
+                  <span className="attachment-size">
+                    {(attachment.size / 1024).toFixed(1)} KB
+                  </span>
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              className="remove-attachment-btn"
+              onClick={handleRemoveAttachment}
+              title="Remove attachment"
+              aria-label="Remove attachment"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          onPaste={handlePaste}
+          placeholder={attachment ? 'Add a message or press Enter to send...' : placeholder}
           rows={1}
           disabled={disabled || isLoading}
           className="chat-textarea"
@@ -66,14 +181,26 @@ export default function MessageInput({
         />
 
         <div className="input-actions-bar">
-          <span className="char-count">
-            {input.length > 0 && `${input.length} chars`}
-          </span>
+          <div className="input-left-actions">
+            <button
+              type="button"
+              className={`attach-file-btn ${attachment ? 'active' : ''}`}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || isLoading}
+              title="Attach image or file (or paste from clipboard)"
+              aria-label="Attach image or file"
+            >
+              <ImageIcon size={18} />
+            </button>
+            <span className="char-count">
+              {input.length > 0 && `${input.length} chars`}
+            </span>
+          </div>
 
           <button
             type="submit"
-            disabled={!input.trim() || isLoading || disabled}
-            className={`send-button ${input.trim() && !isLoading ? 'active' : ''}`}
+            disabled={!canSend}
+            className={`send-button ${canSend ? 'active' : ''}`}
             aria-label="Send message"
             title={isLoading ? 'Generating response...' : 'Send message (Enter)'}
           >
@@ -86,7 +213,7 @@ export default function MessageInput({
         </div>
       </div>
       <div className="input-disclaimer">
-        All interactions are recorded for the research study.
+        All interactions and uploaded models are recorded for the research study.
       </div>
     </form>
   );
