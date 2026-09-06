@@ -97,6 +97,9 @@ export default function ChatWindow({
       'Attachment',
       'Rating',
       'Feedback Notes',
+      'is_plantuml_edited',
+      'original_plantuml_code',
+      'edited_plantuml_code',
     ];
     const rows = messages.map((msg) => [
       activeChat?.id || '',
@@ -110,6 +113,9 @@ export default function ChatWindow({
         : '',
       msg.userRating != null ? msg.userRating : '',
       msg.feedbackComment || '',
+      msg.role === 'assistant' ? (msg.isPlantumlEdited ? 'true' : 'false') : '',
+      msg.originalPlantumlCode || '',
+      msg.editedPlantumlCode || '',
     ]);
 
     // Prepend UTF-8 BOM (\uFEFF) so Excel opens Hebrew and UTF-8 characters cleanly
