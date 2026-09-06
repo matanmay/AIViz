@@ -718,15 +718,28 @@ export default function App() {
   // Wrapped in useCallback so its reference is stable across re-renders caused by input typing —
   // preventing unnecessary PlantUMLDiagram remounts (flickering).
   const handleUpdateMessage = useCallback((messageId, newContent, editDetails = null) => {
+    const isEdited = editDetails?.isEdited !== undefined ? editDetails.isEdited : true;
+    const originalCode = editDetails?.originalCode || null;
+    const editedCode = editDetails?.newCode || null;
+
     // 1. Update messages state so active conversation & next prompt context reflects the edited code
     setMessagesMap((prev) => {
       const chatId = activeChatIdRef.current;
       const chatMsgs = prev[chatId] || [];
       return {
         ...prev,
-        [chatId]: chatMsgs.map((msg) =>
-          msg.id === messageId ? { ...msg, content: newContent } : msg
-        ),
+        [chatId]: chatMsgs.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          const origCode = msg.originalPlantumlCode || originalCode;
+          const finalEditedCode = isEdited ? (editedCode || msg.editedPlantumlCode) : null;
+          return {
+            ...msg,
+            content: newContent,
+            isPlantumlEdited: isEdited,
+            originalPlantumlCode: origCode,
+            editedPlantumlCode: finalEditedCode,
+          };
+        }),
       };
     });
 
@@ -736,9 +749,14 @@ export default function App() {
       const chatMsgs = prev[chatId] || [];
       const targetMsg = chatMsgs.find((m) => m.id === messageId);
       if (targetMsg?.interactionId && isSupabaseConfigured()) {
+        const origCode = targetMsg.originalPlantumlCode || originalCode;
+        const finalEditedCode = isEdited ? (editedCode || targetMsg.editedPlantumlCode || null) : null;
         updateMessageResponse({
           interactionId: targetMsg.interactionId,
           response: newContent,
+          isPlantumlEdited: isEdited,
+          originalPlantumlCode: isEdited ? origCode : null,
+          editedPlantumlCode: finalEditedCode,
         });
       }
       return prev; // no state change needed here, just side-effect
@@ -751,6 +769,9 @@ export default function App() {
         chatId: activeChatIdRef.current,
         details: {
           messageId,
+          isEdited,
+          originalCode,
+          editedCode,
           ...(editDetails || {}),
         },
         user: currentUserRef.current,

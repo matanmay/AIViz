@@ -41,7 +41,15 @@ CREATE TABLE IF NOT EXISTS messages (
     tokens INTEGER,
     status TEXT DEFAULT 'completed',
     feedback_rating INTEGER CHECK (feedback_rating BETWEEN 1 AND 5),
+    feedback_comment TEXT,
     feedback_at TIMESTAMP WITH TIME ZONE,
+    attachment_url TEXT,
+    attachment_name TEXT,
+    attachment_type TEXT,
+    attachment_data TEXT,
+    is_plantuml_edited BOOLEAN DEFAULT false,
+    original_plantuml_code TEXT,
+    edited_plantuml_code TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -139,3 +147,8 @@ CREATE POLICY "Allow all on submitted_diagrams"
     ON submitted_diagrams FOR ALL
     USING (true)
     WITH CHECK (true);
+
+-- 11. Migration: add PlantUML code edit tracking columns to messages table (safe to re-run)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_plantuml_edited BOOLEAN DEFAULT false;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS original_plantuml_code TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_plantuml_code TEXT;

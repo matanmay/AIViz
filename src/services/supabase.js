@@ -468,6 +468,9 @@ export const fetchMessagesFromSupabase = async (chatId) => {
           userRating: row.feedback_rating ?? null,
           feedbackComment: row.feedback_comment ?? null,
           interactionId: row.id,
+          isPlantumlEdited: Boolean(row.is_plantuml_edited),
+          originalPlantumlCode: row.original_plantuml_code ?? null,
+          editedPlantumlCode: row.edited_plantuml_code ?? null,
         });
       }
     }
@@ -580,7 +583,13 @@ export const updateMessageFeedback = async ({ interactionId, rating, comment = n
 /**
  * Update the response content for a message row when PlantUML / content is edited.
  */
-export const updateMessageResponse = async ({ interactionId, response }) => {
+export const updateMessageResponse = async ({
+  interactionId,
+  response,
+  isPlantumlEdited = null,
+  originalPlantumlCode = null,
+  editedPlantumlCode = null,
+}) => {
   const client = getSupabaseClient();
   if (!client) return false;
 
@@ -590,13 +599,40 @@ export const updateMessageResponse = async ({ interactionId, response }) => {
   }
 
   try {
-    const { error } = await client
+    const updatePayload = {
+      response,
+      response_at: new Date().toISOString(),
+    };
+
+    if (isPlantumlEdited !== null && isPlantumlEdited !== undefined) {
+      updatePayload.is_plantuml_edited = isPlantumlEdited;
+    }
+
+    if (originalPlantumlCode !== undefined) {
+      updatePayload.original_plantuml_code = originalPlantumlCode;
+    }
+
+    if (editedPlantumlCode !== undefined) {
+      updatePayload.edited_plantuml_code = editedPlantumlCode;
+    }
+
+    let { error } = await client
       .from('messages')
-      .update({
+      .update(updatePayload)
+      .eq('id', interactionId);
+
+    // Fallback if schema doesn't have is_plantuml_edited or original_plantuml_code columns yet
+    if (error && (error.message?.includes('column') || error.code === 'PGRST204')) {
+      const basicPayload = {
         response,
         response_at: new Date().toISOString(),
-      })
-      .eq('id', interactionId);
+      };
+      const retryResult = await client
+        .from('messages')
+        .update(basicPayload)
+        .eq('id', interactionId);
+      error = retryResult.error;
+    }
 
     if (error) {
       console.warn('Supabase message update error:', error.message);

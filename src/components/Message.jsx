@@ -56,12 +56,31 @@ async function getKrokiUrl(code) {
 
 // ── PlantUML Diagram Renderer & Live Editor ──────────────────────────────────
 // Renders diagrams in large view with zoom controls & fullscreen lightbox.
-const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }) {
+const PlantUMLDiagram = React.memo(function PlantUMLDiagram({
+  code,
+  onSaveCode,
+  originalCode = null,
+  isEdited = false,
+}) {
   const [showSource, setShowSource] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentCode, setCurrentCode] = useState(code);
   const [draftCode, setDraftCode] = useState(code);
-  const [isModified, setIsModified] = useState(false);
+
+  // Preserve initial AI code before any user edits
+  const originalCodeRef = useRef(originalCode || code);
+
+  useEffect(() => {
+    if (originalCode && originalCodeRef.current !== originalCode) {
+      originalCodeRef.current = originalCode;
+    }
+  }, [originalCode]);
+
+  const [isModified, setIsModified] = useState(() => {
+    if (isEdited) return true;
+    const orig = originalCode || code;
+    return Boolean(orig && code.trim() !== orig.trim());
+  });
 
   const initialKey = (code || '').trim();
   const [diagramUrl, setDiagramUrl] = useState(() => plantUmlUrlCache.get(initialKey) || null);
@@ -156,27 +175,31 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
     const trimmed = draftCode.trim();
     if (!trimmed) return;
 
+    const orig = originalCodeRef.current || code;
+    const modified = trimmed !== orig.trim();
+
     setCurrentCode(draftCode);
-    setIsModified(draftCode !== code);
+    setIsModified(modified);
     setIsEditing(false);
     setSavedBadge(true);
     setTimeout(() => setSavedBadge(false), 3000);
 
     if (onSaveCode) {
-      onSaveCode(draftCode);
+      onSaveCode(draftCode, orig);
     }
   };
 
   const handleResetToOriginal = () => {
-    setDraftCode(code);
-    setCurrentCode(code);
+    const orig = originalCodeRef.current || code;
+    setDraftCode(orig);
+    setCurrentCode(orig);
     setIsModified(false);
     setIsEditing(false);
     setSavedBadge(true);
     setTimeout(() => setSavedBadge(false), 3000);
 
     if (onSaveCode) {
-      onSaveCode(code);
+      onSaveCode(orig, orig);
     }
   };
 
@@ -720,7 +743,17 @@ function Message({
     messageContentRef.current = message.content;
   });
 
-  const handleSaveCode = useCallback((codeContent, newCode) => {
+  const messageOriginalPlantumlCodeRef = useRef(message.originalPlantumlCode);
+  useEffect(() => {
+    messageOriginalPlantumlCodeRef.current = message.originalPlantumlCode;
+  });
+
+  const messageIsPlantumlEditedRef = useRef(message.isPlantumlEdited);
+  useEffect(() => {
+    messageIsPlantumlEditedRef.current = message.isPlantumlEdited;
+  });
+
+  const handleSaveCode = useCallback((codeContent, newCode, origCode) => {
     if (!onUpdateMessage) return;
     let content = messageContentRef.current;
     const targetBlock = '```plantuml\n' + codeContent + '\n```';
@@ -735,7 +768,16 @@ function Message({
         content = content.replace(/```plantuml[\s\S]*?```/, '```plantuml\n' + newCode + '\n```');
       }
     }
-    onUpdateMessage(message.id, content, { oldCode: codeContent, newCode });
+
+    const originalCode = messageOriginalPlantumlCodeRef.current || origCode || codeContent;
+    const isEdited = newCode.trim() !== originalCode.trim();
+
+    onUpdateMessage(message.id, content, {
+      oldCode: codeContent,
+      newCode,
+      originalCode,
+      isEdited,
+    });
   }, [onUpdateMessage, message.id]); // intentionally excludes message.content — read via ref
 
   // Memoize markdown components to avoid destroying & remounting subcomponents on typing.
@@ -771,7 +813,9 @@ function Message({
             return (
               <PlantUMLDiagram
                 code={codeContent}
-                onSaveCode={(newCode) => handleSaveCode(codeContent, newCode)}
+                originalCode={messageOriginalPlantumlCodeRef.current}
+                isEdited={Boolean(messageIsPlantumlEditedRef.current)}
+                onSaveCode={(newCode, origCode) => handleSaveCode(codeContent, newCode, origCode)}
               />
             );
           }
