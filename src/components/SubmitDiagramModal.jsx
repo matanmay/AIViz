@@ -82,6 +82,7 @@ export default function SubmitDiagramModal({
   messages = [],
   initialCode = '',
   initialType = '',
+  awaitingFeedback = false,
 }) {
   const [availableDiagrams, setAvailableDiagrams] = useState([]);
   const [selectedDiagramIndex, setSelectedDiagramIndex] = useState('custom');
@@ -205,7 +206,10 @@ export default function SubmitDiagramModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMessage('');
+    if (awaitingFeedback) {
+      setErrorMessage('Please rate the AI response before submitting the diagram.');
+      return;
+    }
 
     const trimmedCode = plantumlCode.trim();
     if (!trimmedCode) {
@@ -359,6 +363,13 @@ export default function SubmitDiagramModal({
           </div>
         ) : (
           <form className="submit-diagram-form" onSubmit={handleSubmit}>
+            {awaitingFeedback && (
+              <div className="submit-modal-feedback-alert" role="alert">
+                <AlertCircle size={16} />
+                <span>Please rate the AI response before submitting the diagram(close this window and rate the last answer).</span>
+              </div>
+            )}
+
             {errorMessage && (
               <div className="submit-error-banner">
                 <AlertCircle size={16} />
@@ -577,7 +588,8 @@ export default function SubmitDiagramModal({
               <button
                 type="submit"
                 className="submit-diagram-action-btn"
-                disabled={isSubmitting || !plantumlCode.trim()}
+                disabled={isSubmitting || !plantumlCode.trim() || awaitingFeedback}
+                title={awaitingFeedback ? 'Please rate the AI response before submitting the diagram' : 'Submit Diagram'}
               >
                 {isSubmitting ? (
                   <>

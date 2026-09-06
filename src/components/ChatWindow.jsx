@@ -3,7 +3,7 @@ import Message from './Message';
 import MessageInput from './MessageInput';
 import SubmitDiagramModal from './SubmitDiagramModal';
 import FeedbackModal from './FeedbackModal';
-import { Bot, Edit3, Check, X, Download } from 'lucide-react';
+import { Bot, Edit3, Check, X, Download, AlertCircle } from 'lucide-react';
 
 export default function ChatWindow({
   activeChat,
@@ -29,9 +29,25 @@ export default function ChatWindow({
   const [headerTitle, setHeaderTitle] = useState('');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [feedbackTargetMessage, setFeedbackTargetMessage] = useState(null);
+  const [submitWarning, setSubmitWarning] = useState(false);
+  const [openSubmitAfterFeedback, setOpenSubmitAfterFeedback] = useState(false);
 
   // Stable callback — avoids re-rendering React.memo(Message) on every keystroke
   const handleOpenFeedback = useCallback((targetMsg) => setFeedbackTargetMessage(targetMsg), []);
+
+  const handleSubmitDiagramClick = () => {
+    if (awaitingFeedback) {
+      setSubmitWarning(true);
+      setTimeout(() => setSubmitWarning(false), 5000);
+      setOpenSubmitAfterFeedback(true);
+      const unratedMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+      if (unratedMsg) {
+        handleOpenFeedback(unratedMsg);
+      }
+      return;
+    }
+    setIsSubmitModalOpen(true);
+  };
 
   // Synchronize headerTitle when activeChat changes or title changes
   useEffect(() => {
@@ -281,18 +297,25 @@ export default function ChatWindow({
 
       {/* Fixed Bottom Input Area */}
       <footer className="chat-footer">
+        {submitWarning && (
+          <div className="submit-diagram-rating-warning" role="alert">
+            <AlertCircle size={16} />
+            <span>Please rate the AI response before submitting the diagram.</span>
+          </div>
+        )}
         <MessageInput
           input={input}
           setInput={setInput}
           onSend={onSend}
           isLoading={isLoading}
           disabled={awaitingFeedback}
+          awaitingFeedback={awaitingFeedback}
           placeholder={
             awaitingFeedback
               ? '⭐ Please rate the response above before continuing...'
               : 'Write your prompt... (Enter to send, Shift+Enter for new line)'
           }
-          onSubmitDiagram={() => setIsSubmitModalOpen(true)}
+          onSubmitDiagram={handleSubmitDiagramClick}
         />
       </footer>
 
@@ -303,12 +326,22 @@ export default function ChatWindow({
         currentUser={currentUser}
         activeChat={activeChat}
         messages={messages}
+        awaitingFeedback={awaitingFeedback}
       />
 
       {/* Response Feedback Modal */}
       <FeedbackModal
         isOpen={Boolean(feedbackTargetMessage)}
-        onClose={() => setFeedbackTargetMessage(null)}
+        onClose={() => {
+          setFeedbackTargetMessage(null);
+          setOpenSubmitAfterFeedback(false);
+        }}
+        onSuccess={() => {
+          if (openSubmitAfterFeedback) {
+            setOpenSubmitAfterFeedback(false);
+            setIsSubmitModalOpen(true);
+          }
+        }}
         onSubmit={async ({ rating, comment, messageId, interactionId }) => {
           if (onRate) {
             await onRate({ rating, comment, messageId, interactionId });
@@ -316,6 +349,7 @@ export default function ChatWindow({
         }}
         targetMessage={feedbackTargetMessage}
         currentUser={currentUser}
+        submitDiagramPending={openSubmitAfterFeedback}
       />
     </div>
   );

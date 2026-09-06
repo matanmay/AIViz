@@ -8,6 +8,7 @@ export default function MessageInput({
   isLoading,
   placeholder = 'Write your prompt... (Enter to send, Shift+Enter for new line)',
   disabled = false,
+  awaitingFeedback = false,
   onSubmitDiagram,
 }) {
   const textareaRef = useRef(null);
@@ -218,9 +219,9 @@ export default function MessageInput({
         {onSubmitDiagram && (
           <button
             type="button"
-            className="submit-diagram-prompt-btn"
+            className={`submit-diagram-prompt-btn ${awaitingFeedback ? 'feedback-blocked' : ''}`}
             onClick={onSubmitDiagram}
-            title="Submit diagram solution for evaluation"
+            title={awaitingFeedback ? 'Please rate the AI response before submitting the diagram' : 'Submit diagram solution for evaluation'}
             aria-label="Submit diagram"
           >
             <Send size={15} />

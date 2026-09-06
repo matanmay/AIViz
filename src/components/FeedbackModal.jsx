@@ -15,8 +15,10 @@ export default function FeedbackModal({
   isOpen,
   onClose,
   onSubmit,
+  onSuccess,
   targetMessage,
   currentUser,
+  submitDiagramPending = false,
 }) {
   const [selectedRating, setSelectedRating] = useState(null);
   const [comment, setComment]               = useState('');
@@ -90,7 +92,12 @@ export default function FeedbackModal({
         });
       }
       setSubmitted(true);
-      setTimeout(() => onClose(), 1000);
+      setTimeout(() => {
+        onClose();
+        if (onSuccess) {
+          onSuccess();
+        }
+      }, 900);
     } catch (err) {
       console.error('Failed to submit feedback:', err);
       setErrorMessage(err.message || 'Failed to submit. Please try again.');
@@ -152,6 +159,12 @@ export default function FeedbackModal({
         </div>
 
         <form className="feedback-form" onSubmit={handleSubmit} noValidate>
+          {submitDiagramPending && (
+            <div className="fm-submit-pending-banner" role="status">
+              <span className="fm-pending-icon">🚀</span>
+              <span>Please rate the AI response to proceed to diagram submission (the submission window will open automatically after rating).</span>
+            </div>
+          )}
 
           {/* Error banner */}
           {errorMessage && (
@@ -271,7 +284,10 @@ export default function FeedbackModal({
               aria-busy={isSubmitting}
             >
               {submitted ? (
-                <><Check size={16} aria-hidden="true" /><span>Saved!</span></>
+                <>
+                  <Check size={16} aria-hidden="true" />
+                  <span>{submitDiagramPending ? 'Opening diagram submission...' : 'Saved!'}</span>
+                </>
               ) : isSubmitting ? (
                 <><Loader2 size={16} className="spin" aria-hidden="true" /><span>Saving…</span></>
               ) : (
