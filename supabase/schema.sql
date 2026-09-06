@@ -8,6 +8,7 @@
 CREATE TABLE IF NOT EXISTS teams (
     team_name TEXT PRIMARY KEY,
     password  TEXT NOT NULL,
+    story TEXT,
     model     TEXT NOT NULL DEFAULT 'gemini-3.5-flash-lite',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
