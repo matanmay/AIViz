@@ -196,6 +196,39 @@ export const syncChatToSupabase = async (chat, teamName = null) => {
 };
 
 /**
+ * Update a chat session's title in Supabase
+ */
+export const updateChatTitleInSupabase = async (chatId, title, teamName = null) => {
+  const client = getSupabaseClient();
+  if (!client || !chatId) return false;
+
+  try {
+    const payload = {
+      id: chatId,
+      title: title || 'New Session',
+      updated_at: new Date().toISOString(),
+    };
+
+    if (teamName) {
+      payload.team_name = teamName;
+    }
+
+    const { error } = await client
+      .from('chats')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Supabase update chat title error:', error.message, error.details);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error updating chat title in Supabase:', err);
+    return false;
+  }
+};
+
+/**
  * Log an individual message to Supabase — NOT used directly anymore.
  * Use logCompleteInteraction instead which stores prompt+response in one row.
  * Kept for backward compatibility.

@@ -1,8 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Message from './Message';
 import MessageInput from './MessageInput';
-import { Bot } from 'lucide-react';
-
+import { Bot, Edit3, Check, X } from 'lucide-react';
 
 export default function ChatWindow({
   activeChat,
@@ -11,6 +10,7 @@ export default function ChatWindow({
   setInput,
   onSend,
   onRetry,
+  onRenameChat,
   onCopy,
   onRate,
   onUpdateMessage,
@@ -21,6 +21,32 @@ export default function ChatWindow({
   onToggleSidebar,
 }) {
   const messagesEndRef = useRef(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [headerTitle, setHeaderTitle] = useState('');
+
+  // Synchronize headerTitle when activeChat changes or title changes
+  useEffect(() => {
+    setHeaderTitle(activeChat?.title || 'New Session');
+    setIsEditingTitle(false);
+  }, [activeChat?.id, activeChat?.title]);
+
+  const handleStartEditing = () => {
+    setHeaderTitle(activeChat?.title || 'New Session');
+    setIsEditingTitle(true);
+  };
+
+  const handleSaveTitle = () => {
+    const trimmed = headerTitle.trim();
+    if (trimmed && activeChat?.id && onRenameChat) {
+      onRenameChat(activeChat.id, trimmed);
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleCancelEditing = () => {
+    setHeaderTitle(activeChat?.title || 'New Session');
+    setIsEditingTitle(false);
+  };
 
   // Auto-scroll to bottom whenever messages change or loading state triggers
   const scrollToBottom = (behavior = 'smooth') => {
@@ -32,7 +58,6 @@ export default function ChatWindow({
   useEffect(() => {
     scrollToBottom('smooth');
   }, [messages, isLoading]);
-
 
   return (
     <div className="chat-window">
@@ -49,9 +74,54 @@ export default function ChatWindow({
             <span className="hamburger-line"></span>
           </button>
           <div className="header-title-container">
-            <h2 className="header-chat-title">
-              {activeChat?.title || 'New Session'}
-            </h2>
+            {isEditingTitle ? (
+              <div className="header-title-edit-form">
+                <input
+                  type="text"
+                  className="header-title-input"
+                  value={headerTitle}
+                  onChange={(e) => setHeaderTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                    if (e.key === 'Escape') handleCancelEditing();
+                  }}
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  className="header-title-save-btn"
+                  onClick={handleSaveTitle}
+                  title="Save title (Enter)"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  className="header-title-cancel-btn"
+                  onClick={handleCancelEditing}
+                  title="Cancel (Esc)"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="header-title-display-group">
+                <h2
+                  className="header-chat-title"
+                  title="Double click or click the edit icon to change session title"
+                  onDoubleClick={handleStartEditing}
+                >
+                  {activeChat?.title || 'New Session'}
+                </h2>
+                <button
+                  className="header-edit-title-btn"
+                  onClick={handleStartEditing}
+                  title="Edit session title"
+                  aria-label="Edit session title"
+                >
+                  <Edit3 size={14} />
+                </button>
+              </div>
+            )}
             <span className="header-study-pill">
               Session
             </span>

@@ -7,6 +7,7 @@ import LoginScreen from './components/LoginScreen';
 import { sendChatMessage } from './services/api';
 import {
   syncChatToSupabase,
+  updateChatTitleInSupabase,
   fetchChatsFromSupabase,
   fetchMessagesFromSupabase,
   isSupabaseConfigured,
@@ -455,6 +456,34 @@ export default function App() {
     }));
   };
 
+  // Rename a chat session (saved to local state, localStorage cache, and Supabase DB)
+  const handleRenameChat = async (chatId, newTitle) => {
+    const trimmedTitle = (newTitle || '').trim();
+    if (!trimmedTitle) return;
+
+    // 1. Update chats in state with custom flag so auto-title doesn't overwrite it
+    setChats((prev) =>
+      prev.map((c) =>
+        c.id === chatId ? { ...c, title: trimmedTitle, isCustomTitle: true } : c
+      )
+    );
+
+    // 2. Persist to Supabase chats table
+    if (isSupabaseConfigured()) {
+      updateChatTitleInSupabase(chatId, trimmedTitle, currentUser?.team_name);
+    }
+
+    // 3. Telemetry: log rename event
+    if (currentUser) {
+      trackChatEvent({
+        eventType: 'chat_renamed',
+        chatId,
+        details: { new_title: trimmedTitle },
+        user: currentUser,
+      });
+    }
+  };
+
   // Send message handler (with drafting duration telemetry)
   const handleSend = async (draftingDurationMs = 0) => {
     if (!input.trim() || isLoading) return;
@@ -477,9 +506,9 @@ export default function App() {
       [activeChatId]: updatedMessages,
     }));
 
-    // Auto-update chat title if it's the first message
+    // Auto-update chat title if it's the first message and no custom title was set
     let currentTitle = activeChat?.title || 'New Session';
-    if (currentMessages.length === 0 || currentTitle === 'New Session') {
+    if (!activeChat?.isCustomTitle && (currentMessages.length === 0 || currentTitle === 'New Session')) {
       const generatedTitle = userPrompt.slice(0, 36) + (userPrompt.length > 36 ? '...' : '');
       currentTitle = generatedTitle;
       setChats((prev) =>
@@ -704,6 +733,7 @@ export default function App() {
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
+        onRenameChat={handleRenameChat}
         onDeleteChat={handleDeleteChat}
         onClearAllChats={handleClearAllChats}
         theme={theme}
@@ -723,6 +753,7 @@ export default function App() {
           setInput={setInput}
           onSend={handleSend}
           onRetry={handleRetry}
+          onRenameChat={handleRenameChat}
           onCopy={handleCopyTelemetry}
           onRate={handleFeedbackRating}
           onUpdateMessage={handleUpdateMessage}

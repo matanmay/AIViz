@@ -535,24 +535,79 @@
   text-overflow: ellipsis;
 }
 
-.delete-session-btn {
+.session-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-session-item:hover .session-item-actions,
+.session-item-actions.visible {
+  opacity: 1;
+}
+
+.edit-session-btn,
+.delete-session-btn,
+.save-session-btn,
+.cancel-session-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
   padding: 4px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.15s ease;
 }
 
-.chat-session-item:hover .delete-session-btn {
-  opacity: 1;
+.edit-session-btn:hover {
+  color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.15);
 }
 
 .delete-session-btn:hover {
   color: var(--error-color);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.save-session-btn {
+  color: #10b981;
+}
+
+.save-session-btn:hover {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.cancel-session-btn:hover {
+  color: var(--error-color);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.chat-session-item.editing {
+  cursor: default;
+  padding: 6px 8px;
+}
+
+.session-title-input {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.83rem;
+  padding: 3px 6px;
+  outline: none;
+  min-width: 0;
+}
+
+.session-title-input:focus {
+  border-color: var(--accent-hover, #60a5fa);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 /* Supabase Status Card */
@@ -772,10 +827,93 @@
   font-size: 0.98rem;
   font-weight: 600;
   color: var(--text-primary);
-  max-width: 300px;
+  max-width: 320px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.header-title-display-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-edit-title-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: all 0.15s ease;
+}
+
+.header-title-display-group:hover .header-edit-title-btn,
+.header-edit-title-btn:hover {
+  opacity: 1;
+  color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+.header-title-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-title-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  outline: none;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.header-title-input:focus {
+  border-color: var(--accent-hover, #60a5fa);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.header-title-save-btn,
+.header-title-cancel-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.header-title-save-btn {
+  color: #10b981;
+}
+
+.header-title-save-btn:hover {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.header-title-cancel-btn {
+  color: var(--text-muted);
+}
+
+.header-title-cancel-btn:hover {
+  color: var(--error-color);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .header-study-pill {

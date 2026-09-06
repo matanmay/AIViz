@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Plus,
   MessageSquare,
@@ -10,6 +10,8 @@ import {
   Bot,
   LogOut,
   User,
+  Edit3,
+  Check,
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../services/supabase';
 
@@ -18,6 +20,7 @@ export default function Sidebar({
   activeChatId,
   onSelectChat,
   onNewChat,
+  onRenameChat,
   onDeleteChat,
   onClearAllChats,
   theme,
@@ -28,6 +31,28 @@ export default function Sidebar({
   onLogout,
 }) {
   const isConnectedToSupabase = isSupabaseConfigured();
+  const [editingChatId, setEditingChatId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+
+  const handleStartEdit = (chat, e) => {
+    e.stopPropagation();
+    setEditingChatId(chat.id);
+    setEditTitle(chat.title || 'New Session');
+  };
+
+  const handleSaveEdit = (chatId, e) => {
+    if (e) e.stopPropagation();
+    const trimmed = editTitle.trim();
+    if (trimmed && onRenameChat) {
+      onRenameChat(chatId, trimmed);
+    }
+    setEditingChatId(null);
+  };
+
+  const handleCancelEdit = (e) => {
+    if (e) e.stopPropagation();
+    setEditingChatId(null);
+  };
 
   return (
     <>
@@ -84,28 +109,82 @@ export default function Sidebar({
                 <p>No sessions yet</p>
               </div>
             ) : (
-              chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`chat-session-item ${activeChatId === chat.id ? 'active' : ''}`}
-                  onClick={() => onSelectChat(chat.id)}
-                >
-                  <MessageSquare size={16} className="session-icon" />
-                  <span className="session-title" title={chat.title}>
-                    {chat.title || 'New Session'}
-                  </span>
-                  <button
-                    className="delete-session-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteChat(chat.id);
-                    }}
-                    title="Delete session"
+              chats.map((chat) => {
+                const isEditing = editingChatId === chat.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={chat.id}
+                      className="chat-session-item editing active"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MessageSquare size={16} className="session-icon" />
+                      <input
+                        type="text"
+                        className="session-title-input"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEdit(chat.id, e);
+                          if (e.key === 'Escape') handleCancelEdit(e);
+                        }}
+                        autoFocus
+                        onFocus={(e) => e.target.select()}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="session-item-actions visible">
+                        <button
+                          className="save-session-btn"
+                          onClick={(e) => handleSaveEdit(chat.id, e)}
+                          title="Save title (Enter)"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          className="cancel-session-btn"
+                          onClick={(e) => handleCancelEdit(e)}
+                          title="Cancel (Esc)"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={chat.id}
+                    className={`chat-session-item ${activeChatId === chat.id ? 'active' : ''}`}
+                    onClick={() => onSelectChat(chat.id)}
                   >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))
+                    <MessageSquare size={16} className="session-icon" />
+                    <span className="session-title" title={chat.title}>
+                      {chat.title || 'New Session'}
+                    </span>
+                    <div className="session-item-actions">
+                      <button
+                        className="edit-session-btn"
+                        onClick={(e) => handleStartEdit(chat, e)}
+                        title="Edit session title"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        className="delete-session-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteChat(chat.id);
+                        }}
+                        title="Delete session"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
