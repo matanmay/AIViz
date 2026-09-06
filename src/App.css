@@ -1337,19 +1337,19 @@
   margin: 14px 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: #090c10;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
 }
 
 .code-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #161b22;
+  background: var(--bg-tertiary);
   padding: 6px 12px;
   font-size: 0.75rem;
-  color: #8b949e;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .code-copy-btn {
@@ -1358,7 +1358,7 @@
   gap: 4px;
   background: transparent;
   border: none;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.72rem;
   cursor: pointer;
   padding: 2px 6px;
@@ -1367,8 +1367,8 @@
 }
 
 .code-copy-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f0f6fc;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .code-pre {
@@ -1377,7 +1377,8 @@
   font-family: var(--font-code);
   font-size: 0.85rem;
   line-height: 1.5;
-  color: #e6edf3;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
 /* Message Actions */
@@ -2834,16 +2835,16 @@
 }
 
 .plantuml-source {
-  background: #090c10;
+  background: var(--bg-secondary);
 }
 
 .plantuml-source-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #161b22;
+  background: var(--bg-tertiary);
   padding: 6px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .plantuml-source-lang {
@@ -2851,7 +2852,7 @@
   font-family: var(--font-code);
   font-size: 0.75rem;
   font-weight: 600;
-  color: #8b949e;
+  color: var(--text-muted);
 }
 
 .plantuml-edit-quick-btn {
@@ -2859,8 +2860,8 @@
   align-items: center;
   gap: 4px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #c9d1d9;
+  border: 1px solid var(--border-medium);
+  color: var(--text-secondary);
   font-size: 0.72rem;
   padding: 2px 8px;
   border-radius: 4px;
@@ -2869,9 +2870,9 @@
 }
 
 .plantuml-edit-quick-btn:hover {
-  background: rgba(99, 102, 241, 0.2);
+  background: rgba(99, 102, 241, 0.15);
   border-color: var(--accent-primary);
-  color: white;
+  color: var(--accent-primary);
 }
 
 .plantuml-source .code-pre {
@@ -2879,8 +2880,8 @@
   padding: 14px 16px;
   border-radius: 0;
   border: none;
-  background: #090c10;
-  color: #e6edf3;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-family: var(--font-code);
   font-size: 0.85rem;
   line-height: 1.55;
@@ -2889,13 +2890,13 @@
 
 .plantuml-source .code-pre code {
   font-family: var(--font-code);
-  color: #e6edf3;
+  color: var(--text-primary);
   background: transparent;
 }
 
 /* PlantUML Interactive Code Editor */
 .plantuml-editor-container {
-  background: #090c10;
+  background: var(--bg-secondary);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -2914,7 +2915,7 @@
   gap: 6px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: #f0f6fc;
+  color: var(--text-primary);
   flex-wrap: wrap;
 }
 
@@ -2924,7 +2925,7 @@
 
 .plantuml-editor-hint {
   font-size: 0.72rem;
-  color: #8b949e;
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -2935,9 +2936,9 @@
   font-family: var(--font-code);
   font-size: 0.85rem;
   line-height: 1.55;
-  color: #e6edf3;
-  background: #0d1117;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
   resize: vertical;
   outline: none;
@@ -2950,6 +2951,7 @@
 .plantuml-code-textarea:focus {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px var(--accent-glow);
+  background: var(--bg-card);
 }
 
 .plantuml-editor-actions {
@@ -2991,8 +2993,8 @@
 
 .plantuml-action-cancel-btn {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #c9d1d9;
+  border: 1px solid var(--border-medium);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   padding: 6px 12px;
   border-radius: var(--radius-xs);
@@ -3001,8 +3003,8 @@
 }
 
 .plantuml-action-cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .plantuml-action-revert-btn {
@@ -3011,7 +3013,7 @@
   gap: 4px;
   background: transparent;
   border: none;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 0.74rem;
   cursor: pointer;
   padding: 4px 6px;
@@ -3332,7 +3334,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-subtle);
   font-size: 0.8rem;
   font-weight: 600;
@@ -3352,8 +3354,8 @@
 }
 
 .plantuml-code-input {
-  background: #0d1117;
-  color: #c9d1d9;
+  background: var(--bg-input);
+  color: var(--text-primary);
   border: none;
   border-radius: 0;
   padding: 12px;
@@ -3367,7 +3369,7 @@
 }
 
 .plantuml-code-input:focus {
-  background: #0b0e14;
+  background: var(--bg-card);
 }
 
 /* Diagram Preview Body */
