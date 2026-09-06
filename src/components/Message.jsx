@@ -256,20 +256,53 @@ const PlantUMLDiagram = React.memo(function PlantUMLDiagram({ code, onSaveCode }
 
   const handleDownload = async (e) => {
     e?.stopPropagation();
-    if (!diagramUrl) return;
-    try {
-      const res = await fetch(diagramUrl);
-      const blob = await res.blob();
+    if (!currentCode && !diagramUrl) return;
+
+    const triggerBlobDownload = (blob, extension = 'svg') => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
+      a.style.display = 'none';
       a.href = url;
-      a.download = `plantuml-diagram-${Date.now()}.svg`;
+      a.download = `plantuml-diagram-${Date.now()}.${extension}`;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => {
+        if (a.parentNode) {
+          a.parentNode.removeChild(a);
+        }
+        window.URL.revokeObjectURL(url);
+      }, 1500);
+    };
+
+    try {
+      // Use Kroki POST API with the raw code. It returns the clean SVG with full CORS support
+      const pumlCode = (currentCode || code || '').trim();
+      let normalized = pumlCode.replace(/^```(?:plantuml|puml)?\s*/i, '').replace(/```\s*$/, '').trim();
+      if (!normalized.startsWith('@startuml')) {
+        normalized = '@startuml\n' + normalized;
+      }
+      if (!normalized.endsWith('@enduml')) {
+        normalized = normalized + '\n@enduml';
+      }
+
+      const res = await fetch('https://kroki.io/plantuml/svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: normalized,
+      });
+
+      if (res.ok) {
+        const svgText = await res.text();
+        const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+        triggerBlobDownload(blob, 'svg');
+        return;
+      }
     } catch (err) {
-      console.warn('Download error:', err);
+      console.warn('Kroki POST SVG download error:', err);
+    }
+
+    // Fallback: open diagramUrl in new tab
+    if (diagramUrl) {
       window.open(diagramUrl, '_blank');
     }
   };
