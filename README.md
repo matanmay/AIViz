@@ -54,7 +54,9 @@ Run the schema in your Supabase project:
 2. Paste the contents of [`supabase/schema.sql`](supabase/schema.sql)
 3. Click **Run**
 
-This creates three tables: `chats`, `messages`, and `experiment_logs`.
+This creates the `teams`, `chats`, `messages`, `experiment_logs`, and
+`submitted_diagrams` tables, along with the `chat-attachments` Storage bucket
+and supporting indexes and RLS policies.
 
 ### Run Locally
 
@@ -67,22 +69,31 @@ npm start
 
 ## 👥 Participant Management
 
-Participants are added manually by the researcher — there is **no self-registration**.
+Participants are represented by records in the `teams` table and are added
+manually by the researcher — there is **no self-registration**. Each team has a
+name, application-layer password, study story, and designated model.
 ---
 
 ## 📊 Data Collection
 
-The following interaction events are automatically logged to `experiment_logs` in Supabase:
+Each prompt/response interaction is stored as one row in `messages`. The
+`experiment_logs` table stores additional telemetry events with a flexible
+`event_type` and JSONB `event_data` payload. Events currently used by the
+application include:
 
 | Event | Description |
 |-------|-------------|
-| `prompt_sent` | Every message sent by the participant, including drafting duration (ms) |
-| `response_received` | AI response, latency (ms), token count, and hidden model ID |
+| `prompt_sent` | Every prompt sent by the participant, including drafting duration (ms) |
+| `response_received` | AI response, latency (ms), token count, and model ID |
 | `content_copied` | When a participant copies a message or code block |
 | `regenerate_requested` | When a participant retries/regenerates a response |
 | `chat_switched` | Navigation between sessions |
 | `tab_blur` / `tab_focus` | When the participant switches away from the browser tab |
 | `user_logged_in` / `user_logged_out` | Session start and end |
+
+Messages can also store 1–5 feedback ratings, comments, attachment metadata,
+and PlantUML edit tracking. Final conceptual diagrams are stored in
+`submitted_diagrams`, including the diagram type and PlantUML source.
 
 ### Exporting Data
 
@@ -92,12 +103,14 @@ From the Supabase SQL Editor:
 -- Export all experiment logs
 SELECT * FROM experiment_logs ORDER BY created_at ASC;
 
--- Export all messages with participant email
-SELECT m.*, c.user_id, e.user_email
+-- Export all messages with team and chat details
+SELECT m.*, c.team_name, c.title AS chat_title
 FROM messages m
 JOIN chats c ON m.chat_id = c.id
-JOIN experiment_logs e ON e.user_id = c.user_id
 ORDER BY m.created_at ASC;
+
+-- Export submitted final diagrams
+SELECT * FROM submitted_diagrams ORDER BY created_at ASC;
 ```
 
 ---
@@ -105,7 +118,8 @@ ORDER BY m.created_at ASC;
 ## 🔒 Blind Study Protocol
 
 - The AI model name is **never displayed** in the UI
-- Model information is stored exclusively in `experiment_logs.event_data` under a researcher-only field
+- The designated model is stored in `teams.model`; telemetry may also include
+  model information in `experiment_logs.event_data`
 - Participants see only **"AI Assistant"** as the sender name
 - The Settings panel has been removed from the participant-facing UI
 
@@ -114,12 +128,17 @@ ORDER BY m.created_at ASC;
 ## 🗄️ Database Schema
 
 ```
-chats              — Conversation sessions (id TEXT, user_id, title, timestamps)
-messages           — Individual messages (id TEXT, chat_id, role, content, tokens)
-experiment_logs    — Full telemetry (user_id, event_type, event_data JSONB, timestamps)
+teams              — Team credentials, study story, designated model, timestamps
+chats              — Conversation sessions (id TEXT, team_name, title, timestamps)
+messages           — Prompt/response interactions, feedback, attachments, timestamps
+experiment_logs    — Telemetry (team_name, chat_id, event_type, event_data JSONB)
+submitted_diagrams — Final diagrams (team_name, chat_id, type, PlantUML code)
 ```
 
-All tables use **Row Level Security (RLS)** — participants can only access their own data.
+All tables use **Row Level Security (RLS)**. The current policies allow all
+operations (`USING (true)` / `WITH CHECK (true)`); authentication and team
+access control are handled in the application layer. The `chat-attachments`
+Storage bucket is public and has an equivalent public access policy.
 
 ---
 
@@ -160,9 +179,13 @@ supabase/
 
 ## 📝 Notes for Researchers
 
-- Chat deletion by participants **does not delete data from the database** — all records are permanently retained for analysis
-- If a participant clears their history, the data remains in Supabase under their `user_id`
-- The `event_data` JSONB field in `experiment_logs` contains the full context for each event including the hidden model identifier
+- Deleting a chat cascades to its messages; its telemetry remains unless
+  explicitly deleted because `experiment_logs.chat_id` is not a foreign key
+- Deleting a team cascades to its chats, messages, telemetry, and submitted
+  diagrams
+- The `event_data` JSONB field in `experiment_logs` contains event-specific
+  context, including model information when recorded
+- Uploaded chat attachments are stored in the public `chat-attachments` bucket
 
 ---
 
