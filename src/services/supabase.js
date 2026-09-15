@@ -5,8 +5,11 @@ export const getSupabaseCredentials = () => {
   const customUrl = localStorage.getItem('aiviz_supabase_url');
   const customKey = localStorage.getItem('aiviz_supabase_anon_key');
 
-  const supabaseUrl = customUrl || process.env.REACT_APP_SUPABASE_URL || '';
-  const supabaseAnonKey = customKey || process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+  const isValidCustomUrl = customUrl && customUrl !== 'undefined' && customUrl !== 'null' && customUrl.startsWith('http');
+  const isValidCustomKey = customKey && customKey !== 'undefined' && customKey !== 'null';
+
+  const supabaseUrl = isValidCustomUrl ? customUrl : process.env.REACT_APP_SUPABASE_URL || '';
+  const supabaseAnonKey = isValidCustomKey ? customKey : process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
   return { supabaseUrl, supabaseAnonKey };
 };

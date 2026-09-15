@@ -74,7 +74,7 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
                 id="login-team-name"
                 type="text"
                 required
-                placeholder="e.g. demo or netta"
+                placeholder="team name"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 disabled={isLoading}
