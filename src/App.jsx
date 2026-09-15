@@ -11,6 +11,7 @@ import {
   uploadAttachmentToSupabase,
   fetchChatsFromSupabase,
   fetchMessagesFromSupabase,
+  deleteChatFromSupabase,
   isSupabaseConfigured,
   getCurrentUser,
   logoutUser,
@@ -386,8 +387,12 @@ export default function App() {
     });
 
     // Mark as hidden so it won't reappear when Supabase reloads
-    // (DB record is intentionally preserved for research)
     addHiddenChatIds([chatId], userKey);
+
+    // Soft-delete in DB: stamp deleted_at so the chat is marked as deleted
+    deleteChatFromSupabase(chatId).catch((err) =>
+      console.warn('Failed to soft-delete chat in DB:', err)
+    );
 
     if (activeChatId === chatId) {
       if (remainingChats.length > 0) {

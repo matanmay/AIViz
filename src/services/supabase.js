@@ -406,6 +406,7 @@ export const fetchChatsFromSupabase = async (teamName = null) => {
     let query = client
       .from('chats')
       .select('*')
+      .is('deleted_at', null)                       // exclude soft-deleted chats
       .order('updated_at', { ascending: false });
 
     if (teamName) {
@@ -492,15 +493,17 @@ export const deleteChatFromSupabase = async (chatId) => {
   if (!client) return false;
 
   try {
+    // Soft-delete: stamp deleted_at instead of removing the row,
+    // so the chat remains in the DB as an audit record.
     const { error } = await client
       .from('chats')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', chatId);
 
     if (error) throw error;
     return true;
   } catch (err) {
-    console.warn('Error deleting chat from Supabase:', err.message);
+    console.warn('Error soft-deleting chat from Supabase:', err.message);
     return false;
   }
 };
@@ -513,7 +516,13 @@ export const clearAllChatsFromSupabase = async (teamName = null) => {
   if (!client) return false;
 
   try {
-    let query = client.from('chats').delete();
+    // Soft-delete all chats: stamp deleted_at on every non-deleted chat row.
+    const deletedAt = new Date().toISOString();
+    let query = client
+      .from('chats')
+      .update({ deleted_at: deletedAt })
+      .is('deleted_at', null);
+
     if (teamName) {
       query = query.eq('team_name', teamName);
     } else {
