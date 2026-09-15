@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getSupabaseClient, isSupabaseConfigured, logCompleteInteraction } from './supabase';
+import { getSupabaseClient, isSupabaseConfigured, logCompleteInteraction, logLlmRequest } from './supabase';
 import { trackResponseReceived } from './telemetry';
 
 // Default model configured for the experiment
@@ -345,6 +345,16 @@ export const sendChatMessage = async ({
       assistantMessage: assistantMsg,
       userId,
     }).catch((err) => console.warn('Supabase logging error:', err));
+
+    // Save the full prompt + LLM response to llm_requests (non-blocking)
+    logLlmRequest({
+      chatId,
+      teamName: userId,
+      model: effectiveModel,
+      messageId: lastUserMsg?.id || null,
+      formattedMessages,
+      response: choice.message.content,
+    }).catch((err) => console.warn('logLlmRequest error:', err));
   }
 
   // Log telemetry event (non-blocking)

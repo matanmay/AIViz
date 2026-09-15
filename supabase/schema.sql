@@ -153,3 +153,35 @@ CREATE POLICY "Allow all on submitted_diagrams"
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_plantuml_edited BOOLEAN DEFAULT false;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS original_plantuml_code TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_plantuml_code TEXT;
+
+-- 12. Table for storing the full prompt sent to the LLM on every interaction
+--     full_prompt is a JSONB array of { role, content } objects:
+--     [ { role: 'system', content: '...' }, { role: 'user', content: '...' }, ... ]
+CREATE TABLE IF NOT EXISTS llm_requests (
+    id          TEXT PRIMARY KEY,
+    chat_id     TEXT REFERENCES chats(id) ON DELETE CASCADE,
+    team_name   TEXT REFERENCES teams(team_name) ON DELETE CASCADE,
+    message_id  TEXT,                          -- links to messages.id (user turn)
+    model       TEXT NOT NULL,
+    full_prompt JSONB NOT NULL DEFAULT '[]'::jsonb,
+    response    TEXT,                          -- raw LLM response text
+    response_at TIMESTAMP WITH TIME ZONE,      -- timestamp when response was received
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_requests_chat    ON llm_requests(chat_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_requests_team    ON llm_requests(team_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_requests_message ON llm_requests(message_id);
+
+ALTER TABLE llm_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all on llm_requests" ON llm_requests;
+CREATE POLICY "Allow all on llm_requests"
+    ON llm_requests FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- Migration: add response columns to llm_requests if table already exists (safe to re-run)
+ALTER TABLE llm_requests ADD COLUMN IF NOT EXISTS response    TEXT;
+ALTER TABLE llm_requests ADD COLUMN IF NOT EXISTS response_at TIMESTAMP WITH TIME ZONE;
+

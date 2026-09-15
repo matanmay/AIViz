@@ -763,3 +763,48 @@ export const submitDiagramToSupabase = async ({
     throw err;
   }
 };
+
+/**
+ * Log the complete prompt array sent to the LLM for every interaction,
+ * together with the raw LLM response text.
+ * full_prompt is the exact formattedMessages array passed to the API —
+ * an ordered list of { role, content } objects starting with the system prompt
+ * followed by all previous turns and ending with the current user message.
+ *
+ * @param {object}   params
+ * @param {string}   params.chatId            - Chat session ID
+ * @param {string}   params.teamName          - Team/user name (nullable)
+ * @param {string}   params.model             - LLM model identifier
+ * @param {string}   [params.messageId]       - Corresponding messages.id (user turn)
+ * @param {Array}    params.formattedMessages  - Full prompt array sent to LLM
+ * @param {string}   [params.response]        - Raw LLM response text
+ */
+export const logLlmRequest = async ({ chatId, teamName, model, messageId = null, formattedMessages, response = null }) => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const id = `llmreq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const { error } = await client.from('llm_requests').insert({
+      id,
+      chat_id: chatId || null,
+      team_name: teamName || null,
+      message_id: messageId || null,
+      model,
+      full_prompt: formattedMessages,
+      response: response || null,
+      response_at: response ? new Date().toISOString() : null,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.warn('logLlmRequest: Supabase insert error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('logLlmRequest: failed to persist LLM request:', err);
+    return false;
+  }
+};
