@@ -4,6 +4,14 @@ import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 
 import LoginScreen from './components/LoginScreen';
+import AchievementToast from './components/AchievementToast';
+import { triggerConfetti } from './utils/confetti';
+import {
+  getGamificationState,
+  recordTemplateUsed,
+  recordRegularPrompt,
+  dismissNudge,
+} from './services/gamification';
 import { sendChatMessage } from './services/api';
 import {
   syncChatToSupabase,
@@ -137,6 +145,22 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
+
+  const [gamificationState, setGamificationState] = useState(() =>
+    getGamificationState(currentUser?.team_name || 'default')
+  );
+  const [activeAchievement, setActiveAchievement] = useState(null);
+
+  useEffect(() => {
+    if (currentUser?.team_name) {
+      setGamificationState(getGamificationState(currentUser.team_name));
+    }
+  }, [currentUser]);
+
+  const handleDismissNudge = useCallback(() => {
+    const next = dismissNudge(currentUser?.team_name);
+    setGamificationState(next);
+  }, [currentUser?.team_name]);
 
   // Persist chats and messages to localStorage scoped per user
   useEffect(() => {
@@ -567,6 +591,26 @@ export default function App() {
       user: currentUser,
     });
 
+    // Gamification: record template usage vs regular prompt
+    if (templateMeta && templateMeta.templateId) {
+      const { state: nextGamState, newlyUnlocked } = recordTemplateUsed(
+        currentUser?.team_name,
+        templateMeta.templateId
+      );
+      setGamificationState(nextGamState);
+
+      // Trigger cool celebration confetti animation!
+      triggerConfetti();
+
+      if (newlyUnlocked && newlyUnlocked.length > 0) {
+        setActiveAchievement(newlyUnlocked[0]);
+        setTimeout(() => triggerConfetti({ particleCount: 95 }), 400);
+      }
+    } else {
+      const { state: nextGamState } = recordRegularPrompt(currentUser?.team_name);
+      setGamificationState(nextGamState);
+    }
+
     setIsLoading(true);
 
     try {
@@ -853,8 +897,16 @@ export default function App() {
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           currentUser={currentUser}
+          gamificationState={gamificationState}
+          onDismissNudge={handleDismissNudge}
         />
       </div>
+
+      {/* Gamification Celebration Toast */}
+      <AchievementToast
+        achievement={activeAchievement}
+        onClose={() => setActiveAchievement(null)}
+      />
     </div>
   );
 }

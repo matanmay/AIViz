@@ -5160,4 +5160,402 @@
   }
 }
 
+/* ==========================================================================
+   Gamification & Smart Nudge Banner Styles
+   ========================================================================== */
+
+/* Template Mastery Header in Modal Sidebar */
+.template-sidebar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.template-sidebar-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-mastery-pill {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.2);
+  color: #c7d2fe;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  white-space: nowrap;
+}
+
+.template-mastery-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.template-mastery-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.template-item-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.template-status-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.template-status-badge.explored {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.template-status-badge.new {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Template Nudge Banner (Appears after 3+ prompts without templates) */
+.template-nudge-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md, 10px);
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.85), rgba(49, 46, 129, 0.85));
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25), 0 0 12px rgba(99, 102, 241, 0.15);
+  animation: nudgeSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes nudgeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.template-nudge-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.template-nudge-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: pulseGlow 2.5s infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+}
+
+.template-nudge-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.template-nudge-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nudge-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.nudge-streak-info {
+  font-size: 0.7rem;
+  color: #c7d2fe;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.template-nudge-body {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #e0e7ff;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: normal;
+}
+
+.template-nudge-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.template-nudge-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  color: #ffffff;
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.template-nudge-cta-btn:hover {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+}
+
+.template-nudge-dismiss-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #a5b4fc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.template-nudge-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* Achievement Toast (Floating Badge Unlock Notification) */
+.achievement-toast-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100000;
+  pointer-events: auto;
+  animation: toastSlideDown 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes toastSlideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -24px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.achievement-toast-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: rgba(24, 24, 38, 0.95);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(245, 158, 11, 0.25);
+  min-width: 320px;
+  max-width: 480px;
+}
+
+.achievement-toast-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(234, 179, 8, 0.1));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.achievement-emoji-icon {
+  font-size: 1.5rem;
+}
+
+.achievement-sparkle-mini {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  color: #fbbf24;
+  animation: sparkleTwinkle 1.2s infinite alternate;
+}
+
+@keyframes sparkleTwinkle {
+  from { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
+  to { transform: scale(1.2) rotate(45deg); opacity: 1; }
+}
+
+.achievement-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.achievement-toast-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.achievement-badge-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.achievement-badge-pill-he {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #fde68a;
+}
+
+.achievement-toast-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.achievement-title-he {
+  font-weight: 500;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+}
+
+.achievement-toast-desc {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.achievement-toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.achievement-toast-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* Light Theme Adjustments for Nudge & Badges */
+[data-theme='light'] .template-nudge-banner {
+  background: linear-gradient(135deg, #eef2ff, #ede9fe);
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
+}
+
+[data-theme='light'] .template-nudge-body {
+  color: #334155;
+}
+
+[data-theme='light'] .nudge-streak-info {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+}
+
+[data-theme='light'] .achievement-toast-card {
+  background: #ffffff;
+  border-color: #f59e0b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15), 0 0 16px rgba(245, 158, 11, 0.2);
+}
+
+[data-theme='light'] .achievement-toast-title {
+  color: #0f172a;
+}
+
+[data-theme='light'] .achievement-title-he {
+  color: #475569;
+}
+
+@media (max-width: 860px) {
+  .template-nudge-banner {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .template-nudge-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+
+
 

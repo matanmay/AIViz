@@ -145,6 +145,7 @@ export default function TemplateModal({
   isLoading = false,
   disabled = false,
   awaitingFeedback = false,
+  gamificationState = null,
 }) {
   const [selectedTemplateId, setSelectedTemplateId] = useState(TEMPLATES[0]?.id || 'create-model');
   const [formValues, setFormValues] = useState({});
@@ -342,24 +343,54 @@ export default function TemplateModal({
           {/* Template Selector Sidebar */}
           <aside className="template-list-sidebar" aria-label="Available templates">
             <div className="template-sidebar-header">
-              <Layers size={14} />
-              <span>Modeling Templates ({TEMPLATES.length})</span>
+              <div className="template-sidebar-title-row">
+                <div className="template-sidebar-title-left">
+                  <Layers size={14} />
+                  <span>Templates ({TEMPLATES.length})</span>
+                </div>
+                <span className="template-mastery-pill">
+                  {(gamificationState?.usedTemplateIds || []).length} / {TEMPLATES.length} Explored
+                </span>
+              </div>
+              <div className="template-mastery-progress-track">
+                <div
+                  className="template-mastery-progress-fill"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      (((gamificationState?.usedTemplateIds || []).length) / TEMPLATES.length) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
             </div>
             <div className="template-cards-scroll">
               {TEMPLATES.map((tmpl) => {
                 const isSelected = tmpl.id === selectedTemplateId;
+                const isExplored = (gamificationState?.usedTemplateIds || []).includes(tmpl.id);
                 const category = CATEGORY_MAP[tmpl.id] || 'General';
                 return (
                   <button
                     key={tmpl.id}
                     type="button"
-                    className={`template-list-item ${isSelected ? 'active' : ''}`}
+                    className={`template-list-item ${isSelected ? 'active' : ''} ${isExplored ? 'explored' : ''}`}
                     onClick={() => setSelectedTemplateId(tmpl.id)}
                     aria-pressed={isSelected}
                   >
                     <div className="template-item-top">
                       <span className="template-item-name">{tmpl.name}</span>
-                      <span className="template-item-badge">{category}</span>
+                      <div className="template-item-badges">
+                        {isExplored ? (
+                          <span className="template-status-badge explored" title="You explored this template!">
+                            ⭐ Done
+                          </span>
+                        ) : (
+                          <span className="template-status-badge new" title="Try this template!">
+                            New
+                          </span>
+                        )}
+                        <span className="template-item-badge">{category}</span>
+                      </div>
                     </div>
                     <p className="template-item-desc">{tmpl.description}</p>
                   </button>

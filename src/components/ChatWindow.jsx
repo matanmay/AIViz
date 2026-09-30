@@ -4,6 +4,7 @@ import MessageInput from './MessageInput';
 import SubmitDiagramModal from './SubmitDiagramModal';
 import FeedbackModal from './FeedbackModal';
 import TemplateModal from './TemplateModal';
+import TemplateNudgeBanner from './TemplateNudgeBanner';
 import { Bot, Edit3, Check, X, Download, AlertCircle, ExternalLink, Sparkles } from 'lucide-react';
 
 export default function ChatWindow({
@@ -24,6 +25,8 @@ export default function ChatWindow({
   awaitingFeedback,
   onToggleSidebar,
   currentUser,
+  gamificationState,
+  onDismissNudge,
 }) {
   const messagesEndRef = useRef(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -354,6 +357,19 @@ export default function ChatWindow({
             <span>Please rate the AI response before submitting the diagram.</span>
           </div>
         )}
+
+        {/* Gamification Nudge Banner after 3+ prompts without templates */}
+        {gamificationState?.consecutiveNonTemplateCount >= 3 &&
+          !gamificationState?.isNudgeDismissed &&
+          !awaitingFeedback && (
+            <TemplateNudgeBanner
+              teamName={currentUser?.team_name || currentUser?.username}
+              consecutiveCount={gamificationState.consecutiveNonTemplateCount}
+              onOpenTemplates={() => setIsTemplateModalOpen(true)}
+              onDismiss={onDismissNudge}
+            />
+          )}
+
         <MessageInput
           input={input}
           setInput={setInput}
@@ -389,6 +405,7 @@ export default function ChatWindow({
         isLoading={isLoading}
         disabled={awaitingFeedback}
         awaitingFeedback={awaitingFeedback}
+        gamificationState={gamificationState}
       />
 
       {/* Submit Diagram Modal */}
