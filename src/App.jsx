@@ -491,7 +491,12 @@ export default function App() {
   };
 
   // Send message handler (with drafting duration telemetry & optional file attachment)
-  const handleSend = async (draftingDurationMs = 0, attachment = null, promptOverride = null) => {
+  const handleSend = async (
+    draftingDurationMs = 0,
+    attachment = null,
+    promptOverride = null,
+    templateMeta = null
+  ) => {
     const textToSend = (promptOverride != null ? promptOverride : input).trim();
     if ((!textToSend && !attachment) || isLoading) return;
 
@@ -523,6 +528,7 @@ export default function App() {
       role: 'user',
       content: userPrompt,
       timestamp: new Date().toISOString(),
+      templateMeta: templateMeta || null,
       attachment: processedAttachment
         ? {
             name: processedAttachment.name,
@@ -573,6 +579,7 @@ export default function App() {
         userEmail: currentUser?.team_name || currentUser?.username || null,
         draftingDurationMs,
         model: currentUser?.model,
+        templateMeta,
       });
 
       setMessagesMap((prev) => ({

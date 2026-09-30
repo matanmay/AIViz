@@ -1,5 +1,12 @@
 import axios from 'axios';
-import { getSupabaseClient, isSupabaseConfigured, logCompleteInteraction, logLlmRequest } from './supabase';
+import {
+  getSupabaseClient,
+  isSupabaseConfigured,
+  logCompleteInteraction,
+  logLlmRequest,
+  logTemplateUsage,
+  updateTemplateUsageResponse,
+} from './supabase';
 import { trackResponseReceived } from './telemetry';
 
 // Default model configured for the experiment
@@ -171,12 +178,34 @@ export const sendChatMessage = async ({
   userEmail = null,
   draftingDurationMs = null,
   systemPrompt = DEFAULT_SYSTEM_PROMPT,
+  templateMeta = null,
 }) => {
   const effectiveModel = model || DEFAULT_EXPERIMENT_MODEL;
   const effectiveSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
   const startTime = Date.now();
   let choice = null;
   let totalTokens = null;
+
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+  const activeTemplateMeta = templateMeta || lastUserMsg?.templateMeta;
+  let templateUsageId = null;
+
+  // Log initial template usage (prompt & parameters) as soon as request starts
+  if (activeTemplateMeta && activeTemplateMeta.templateId && chatId) {
+    templateUsageId = `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    logTemplateUsage({
+      id: templateUsageId,
+      teamName: userId,
+      chatId,
+      messageId: lastUserMsg?.id || null,
+      templateId: activeTemplateMeta.templateId,
+      templateName: activeTemplateMeta.templateName,
+      parameters: activeTemplateMeta.parameters || {},
+      prompt: lastUserMsg?.content || '',
+      executionType: activeTemplateMeta.executionType || 'execute',
+      model: effectiveModel,
+    }).catch((err) => console.warn('logTemplateUsage notice:', err));
+  }
 
   // Format messages (OpenAI-compatible schema with multimodal image support)
   const formattedMessages = [
@@ -311,6 +340,16 @@ export const sendChatMessage = async ({
         errorMessage = error.message;
       }
 
+      if (activeTemplateMeta && templateUsageId) {
+        updateTemplateUsageResponse({
+          id: templateUsageId,
+          messageId: lastUserMsg?.id || null,
+          response: `[Error: ${errorMessage}]`,
+          latencyMs: Date.now() - startTime,
+          model: effectiveModel,
+        }).catch(() => {});
+      }
+
       const customError = new Error(errorMessage);
       customError.originalError = error;
       throw customError;
@@ -322,7 +361,6 @@ export const sendChatMessage = async ({
   }
 
   const latencyMs = Date.now() - startTime;
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
 
   // Do NOT attach model name to assistantMsg — blind study protocol
   const assistantMsg = {
@@ -355,6 +393,17 @@ export const sendChatMessage = async ({
       formattedMessages,
       response: choice.message.content,
     }).catch((err) => console.warn('logLlmRequest error:', err));
+
+    // Save template usage with LLM response
+    if (activeTemplateMeta && (templateUsageId || lastUserMsg?.id)) {
+      updateTemplateUsageResponse({
+        id: templateUsageId,
+        messageId: lastUserMsg?.id || null,
+        response: choice.message.content,
+        latencyMs,
+        model: effectiveModel,
+      }).catch((err) => console.warn('updateTemplateUsageResponse error:', err));
+    }
   }
 
   // Log telemetry event (non-blocking)

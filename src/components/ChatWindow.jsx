@@ -34,6 +34,7 @@ export default function ChatWindow({
   const [openSubmitAfterFeedback, setOpenSubmitAfterFeedback] = useState(false);
   const [showUsabilityBanner, setShowUsabilityBanner] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [pendingTemplateMeta, setPendingTemplateMeta] = useState(null);
 
   // Stable callback — avoids re-rendering React.memo(Message) on every keystroke
   const handleOpenFeedback = useCallback((targetMsg) => setFeedbackTargetMessage(targetMsg), []);
@@ -356,7 +357,10 @@ export default function ChatWindow({
         <MessageInput
           input={input}
           setInput={setInput}
-          onSend={onSend}
+          onSend={(draftingDurationMs, currentAttachment) => {
+            onSend(draftingDurationMs, currentAttachment, null, pendingTemplateMeta);
+            setPendingTemplateMeta(null);
+          }}
           isLoading={isLoading}
           disabled={awaitingFeedback}
           awaitingFeedback={awaitingFeedback}
@@ -374,11 +378,13 @@ export default function ChatWindow({
       <TemplateModal
         isOpen={isTemplateModalOpen}
         onClose={() => setIsTemplateModalOpen(false)}
-        onInsertPrompt={(prompt) => {
+        onInsertPrompt={(prompt, templateMeta) => {
           setInput(prompt);
+          setPendingTemplateMeta(templateMeta);
         }}
-        onExecutePrompt={(prompt) => {
-          onSend(0, null, prompt);
+        onExecutePrompt={(prompt, templateMeta) => {
+          setPendingTemplateMeta(null);
+          onSend(0, null, prompt, templateMeta);
         }}
         isLoading={isLoading}
         disabled={awaitingFeedback}

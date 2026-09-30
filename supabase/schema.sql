@@ -185,3 +185,39 @@ CREATE POLICY "Allow all on llm_requests"
 ALTER TABLE llm_requests ADD COLUMN IF NOT EXISTS response    TEXT;
 ALTER TABLE llm_requests ADD COLUMN IF NOT EXISTS response_at TIMESTAMP WITH TIME ZONE;
 
+-- 13. Table for tracking prompt template usage, parameters, prompt and LLM response
+CREATE TABLE IF NOT EXISTS template_usages (
+    id             TEXT PRIMARY KEY,
+    team_name      TEXT REFERENCES teams(team_name) ON DELETE CASCADE,
+    chat_id        TEXT REFERENCES chats(id) ON DELETE CASCADE,
+    message_id     TEXT,                                  -- links to messages.id / interaction row
+    template_id    TEXT NOT NULL,                         -- e.g. 'create-model', 'update-model'
+    template_name  TEXT NOT NULL,                         -- e.g. 'Create Model'
+    parameters     JSONB NOT NULL DEFAULT '{}'::jsonb,    -- filled placeholder values (<model>, <desc>, etc.)
+    prompt         TEXT NOT NULL,                         -- final prompt string sent to the LLM
+    response       TEXT,                                  -- LLM response text
+    response_at    TIMESTAMP WITH TIME ZONE,              -- timestamp when response was received
+    latency_ms     INTEGER,                               -- response latency in milliseconds
+    model          TEXT,                                  -- LLM model used for the response
+    execution_type TEXT DEFAULT 'execute',                -- 'execute' (direct run) or 'insert' (inserted to input then sent)
+    created_at     TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_template_usages_team     ON template_usages(team_name, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_template_usages_chat     ON template_usages(chat_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_template_usages_template ON template_usages(template_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_template_usages_message  ON template_usages(message_id);
+
+ALTER TABLE template_usages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all on template_usages" ON template_usages;
+CREATE POLICY "Allow all on template_usages"
+    ON template_usages FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- 14. Migration: add template tracking columns to existing messages table (safe to re-run)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_id TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_name TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_params JSONB;
+

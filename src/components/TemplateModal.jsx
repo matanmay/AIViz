@@ -276,10 +276,20 @@ export default function TemplateModal({
     }
   };
 
+  const getTemplateMeta = (executionType = 'execute') => ({
+    templateId: selectedTemplate.id,
+    templateName: selectedTemplate.name,
+    parameters:
+      selectedTemplate.id === 'contextualize'
+        ? { customPrompt: contextPrompt }
+        : { ...formValues },
+    executionType,
+  });
+
   const handleInsertClick = () => {
     const prompt = validateAndBuildPrompt();
     if (prompt && onInsertPrompt) {
-      onInsertPrompt(prompt);
+      onInsertPrompt(prompt, getTemplateMeta('insert'));
       onClose();
     }
   };
@@ -287,7 +297,7 @@ export default function TemplateModal({
   const handleExecuteClick = () => {
     const prompt = validateAndBuildPrompt();
     if (prompt && onExecutePrompt) {
-      onExecutePrompt(prompt);
+      onExecutePrompt(prompt, getTemplateMeta('execute'));
       onClose();
     }
   };

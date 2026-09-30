@@ -341,17 +341,27 @@ export const logCompleteInteraction = async ({
       }
     }
 
+    // Attach template metadata if present
+    if (userMessage.templateMeta) {
+      payload.template_id = userMessage.templateMeta.templateId || null;
+      payload.template_name = userMessage.templateMeta.templateName || null;
+      payload.template_params = userMessage.templateMeta.parameters || null;
+    }
+
     let { error } = await client
       .from('messages')
       .upsert(payload, { onConflict: 'id' });
 
-    // Fallback: if schema doesn't have attachment columns yet, retry without them so message logging never fails
-    if (error && userMessage.attachment && (error.message?.includes('column') || error.code === 'PGRST204')) {
+    // Fallback: if schema doesn't have attachment/template columns yet, retry without them so message logging never fails
+    if (error && (error.message?.includes('column') || error.code === 'PGRST204')) {
       const basicPayload = { ...payload };
       delete basicPayload.attachment_url;
       delete basicPayload.attachment_name;
       delete basicPayload.attachment_type;
       delete basicPayload.attachment_data;
+      delete basicPayload.template_id;
+      delete basicPayload.template_name;
+      delete basicPayload.template_params;
       const retryResult = await client
         .from('messages')
         .upsert(basicPayload, { onConflict: 'id' });
@@ -805,6 +815,151 @@ export const logLlmRequest = async ({ chatId, teamName, model, messageId = null,
     return true;
   } catch (err) {
     console.warn('logLlmRequest: failed to persist LLM request:', err);
+    return false;
+  }
+};
+
+/**
+ * Log template usage to Supabase template_usages table.
+ * Records the team, which template was used, the chat session, timestamp,
+ * the placeholder parameters filled by the user, and the generated prompt.
+ *
+ * @param {object}   params
+ * @param {string}   [params.id]            - Unique record ID
+ * @param {string}   params.teamName        - Team/group name
+ * @param {string}   params.chatId          - Chat session ID
+ * @param {string}   [params.messageId]     - Corresponding user message ID
+ * @param {string}   params.templateId      - Template identifier (e.g., 'create-model')
+ * @param {string}   params.templateName    - Template display name (e.g., 'Create Model')
+ * @param {object}   [params.parameters]    - Filled placeholder key-value pairs
+ * @param {string}   params.prompt          - The prompt string sent to the LLM
+ * @param {string}   [params.response]      - The LLM response text (if available immediately)
+ * @param {string}   [params.responseAt]    - ISO timestamp of response
+ * @param {number}   [params.latencyMs]     - Response latency in milliseconds
+ * @param {string}   [params.model]         - Designated LLM model
+ * @param {string}   [params.executionType] - 'execute' (direct) or 'insert' (inserted to chatbox)
+ * @returns {Promise<string|null>} The inserted record ID or null
+ */
+export const logTemplateUsage = async ({
+  id,
+  teamName,
+  chatId,
+  messageId = null,
+  templateId,
+  templateName,
+  parameters = {},
+  prompt,
+  response = null,
+  responseAt = null,
+  latencyMs = null,
+  model = null,
+  executionType = 'execute',
+}) => {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    const recordId = id || `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const payload = {
+      id: recordId,
+      team_name: teamName || null,
+      chat_id: chatId || null,
+      message_id: messageId || null,
+      template_id: templateId,
+      template_name: templateName,
+      parameters: parameters || {},
+      prompt: prompt,
+      response: response || null,
+      response_at: responseAt || (response ? new Date().toISOString() : null),
+      latency_ms: latencyMs || null,
+      model: model || null,
+      execution_type: executionType || 'execute',
+      created_at: new Date().toISOString(),
+    };
+
+    const { error } = await client
+      .from('template_usages')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('logTemplateUsage notice:', error.message);
+    }
+
+    // Always log to experiment_logs as telemetry backup (accepts arbitrary JSON)
+    try {
+      await client.from('experiment_logs').insert([
+        {
+          id: `evt-tpl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          team_name: teamName || null,
+          chat_id: chatId || null,
+          event_type: 'template_used',
+          event_data: {
+            templateUsageId: recordId,
+            messageId,
+            templateId,
+            templateName,
+            parameters,
+            promptLength: prompt?.length,
+            executionType,
+            hasResponse: Boolean(response),
+          },
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (e) {
+      // non-blocking
+    }
+
+    return recordId;
+  } catch (err) {
+    console.warn('Failed to log template usage to Supabase:', err);
+    return null;
+  }
+};
+
+/**
+ * Update a template_usages record with the assistant's response upon completion.
+ *
+ * @param {object}   params
+ * @param {string}   [params.id]        - template_usages record ID
+ * @param {string}   [params.messageId] - Or lookup by message_id
+ * @param {string}   params.response    - Raw LLM response text
+ * @param {number}   [params.latencyMs] - Latency in milliseconds
+ * @param {string}   [params.model]     - LLM model identifier
+ */
+export const updateTemplateUsageResponse = async ({
+  id,
+  messageId = null,
+  response,
+  latencyMs = null,
+  model = null,
+}) => {
+  const client = getSupabaseClient();
+  if (!client || (!id && !messageId)) return false;
+
+  try {
+    const updatePayload = {
+      response: response || null,
+      response_at: new Date().toISOString(),
+    };
+    if (latencyMs != null) updatePayload.latency_ms = latencyMs;
+    if (model) updatePayload.model = model;
+
+    let query = client.from('template_usages').update(updatePayload);
+    if (id) {
+      query = query.eq('id', id);
+    } else if (messageId) {
+      query = query.eq('message_id', messageId);
+    }
+
+    const { error } = await query;
+    if (error) {
+      console.warn('updateTemplateUsageResponse notice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Failed to update template usage response in Supabase:', err);
     return false;
   }
 };
