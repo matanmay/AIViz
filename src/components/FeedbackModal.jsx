@@ -241,7 +241,6 @@ export default function FeedbackModal({
               <label className="feedback-section-label" htmlFor="fm-comments">
                 <MessageSquare size={13} aria-hidden="true" />
                 Comments &amp; Notes
-                <span className="fm-lang-hint"> (הערות)</span>
               </label>
               <span className="feedback-optional-tag">Optional</span>
             </div>

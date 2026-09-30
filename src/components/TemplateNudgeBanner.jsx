@@ -37,7 +37,7 @@ export default function TemplateNudgeBanner({
           title="Open prompt templates library"
         >
           <Sparkles size={14} />
-          <span>Explore Templates (תבניות מידול)</span>
+          <span>Explore Templates</span>
           <ArrowRight size={13} />
         </button>
 

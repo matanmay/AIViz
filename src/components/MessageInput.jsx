@@ -203,7 +203,7 @@ export default function MessageInput({
                   className="template-picker-btn"
                   onClick={onOpenTemplates}
                   disabled={disabled || isLoading}
-                  title="Choose and execute a prompt template (תבניות פרומפט)"
+                  title="Choose and execute a prompt template"
                   aria-label="Prompt Templates"
                 >
                   <Sparkles size={15} />

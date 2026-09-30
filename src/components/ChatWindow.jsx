@@ -296,7 +296,7 @@ export default function ChatWindow({
                   title="Choose and execute a prompt template"
                 >
                   <Sparkles size={16} />
-                  <span>Choose a Prompt Template (תבניות פרומפט)</span>
+                  <span>Choose a Prompt Template</span>
                 </button>
               </div>
             </div>

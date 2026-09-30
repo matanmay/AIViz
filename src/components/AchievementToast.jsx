@@ -25,14 +25,12 @@ export default function AchievementToast({ achievement, onClose }) {
         <div className="achievement-toast-content">
           <div className="achievement-toast-badge-row">
             <span className="achievement-badge-pill">New Achievement!</span>
-            <span className="achievement-badge-pill-he">הישג חדש!</span>
           </div>
           <h4 className="achievement-toast-title">
             {achievement.name}
-            {achievement.nameHe && <span className="achievement-title-he"> ({achievement.nameHe})</span>}
           </h4>
           <p className="achievement-toast-desc">
-            {achievement.descriptionHe || achievement.description}
+            {achievement.description}
           </p>
         </div>
 
