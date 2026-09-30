@@ -5110,11 +5110,126 @@
 
 [data-theme='light'] .template-list-item.active {
   background: #ede9fe;
-  border-color: #c4b5fd;
+  border-color: #a78bfa;
 }
 
 [data-theme='light'] .template-item-name {
   color: #1e293b;
+}
+
+[data-theme='light'] .template-list-item.active .template-item-name {
+  color: #312e81;
+}
+
+/* Category Badge Visibility in Light Mode */
+[data-theme='light'] .template-item-badge {
+  background: #e2e8f0;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  font-weight: 500;
+}
+
+[data-theme='light'] .template-list-item.active .template-item-badge {
+  background: #c7d2fe;
+  color: #312e81;
+  border: 1px solid #818cf8;
+  font-weight: 600;
+}
+
+[data-theme='light'] .template-item-desc {
+  color: #64748b;
+}
+
+[data-theme='light'] .template-list-item.active .template-item-desc {
+  color: #3730a3;
+  opacity: 0.9;
+}
+
+/* Status Badges in Light Mode */
+[data-theme='light'] .template-status-badge.explored {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+[data-theme='light'] .template-status-badge.new {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+/* Mastery Pill & Progress in Light Mode */
+[data-theme='light'] .template-mastery-pill {
+  background: #ede9fe;
+  color: #4338ca;
+  border: 1px solid #c4b5fd;
+}
+
+[data-theme='light'] .template-mastery-progress-track {
+  background: #e2e8f0;
+}
+
+/* Action Buttons & Helpers in Light Mode */
+[data-theme='light'] .template-load-example-btn {
+  background: #ede9fe;
+  border-color: #c4b5fd;
+  color: #4338ca;
+}
+
+[data-theme='light'] .template-load-example-btn:hover {
+  background: #ddd6fe;
+  border-color: #a78bfa;
+}
+
+[data-theme='light'] .template-reset-btn {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme='light'] .template-reset-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme='light'] .template-notes-callout {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+[data-theme='light'] .badge-required {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+[data-theme='light'] .badge-optional {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+[data-theme='light'] .suggestion-pill {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+[data-theme='light'] .suggestion-pill:hover {
+  background: #ede9fe;
+  color: #4338ca;
+  border-color: #c4b5fd;
+}
+
+[data-theme='light'] .preview-card-header {
+  background: #f1f5f9;
+  border-bottom-color: #e2e8f0;
+}
+
+[data-theme='light'] .preview-copy-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 [data-theme='light'] .preview-content {
