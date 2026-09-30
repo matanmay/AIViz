@@ -48,9 +48,10 @@ export default function LoginScreen({ onLoginSuccess, theme, onToggleTheme }) {
       <div className="login-card-container">
         {/* Brand Header */}
         <div className="login-header">
-          <div className="login-logo-glow">
+          <img src="/logo_withoutbg.png" alt="AIViz Logo" className="login-logo" width={140} height={140} />
+          {/* <div className="login-logo-glow">
             <Bot size={36} />
-          </div>
+          </div> */}
           <h1 className="login-title">AIViz Workspace</h1>
           <p className="login-subtitle">
             Private AI Chat &amp; Analytics Interface

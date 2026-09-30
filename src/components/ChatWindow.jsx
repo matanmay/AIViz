@@ -280,9 +280,10 @@ export default function ChatWindow({
         {messages.length === 0 ? (
           <div className="empty-state">
             <div className="empty-hero">
-              <div className="empty-bot-badge">
-                <Bot size={36} />
-              </div>
+              {/* <div className="empty-bot-badge"> */}
+                {/* <Bot size={36} /> */}
+                <img src="/logo_withoutbg.png" alt="AIViz Logo" className="login-logo" width={120} height={120} />
+              {/* </div> */}
               <h1 className="empty-title">AI Assistant</h1>
               <p className="empty-subtitle">
                 Welcome to the course LLM assistant. Start by typing your question below.

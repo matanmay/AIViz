@@ -63,13 +63,15 @@ export default function Sidebar({
         {/* Top Header */}
         <div className="sidebar-header">
           <div className="brand-logo">
-            <div className="logo-icon">
-              <Bot size={20} />
-            </div>
-            <div className="brand-text">
-              <span className="brand-title">AIViz Study</span>
+            <img src="/logo_withoutbg.png" alt="AIViz Logo" className="login-logo" width={120} height={120} />
+            {/* <div className="logo-icon"> */}
+              {/* <Bot size={20} /> */}
+              
+            {/* </div> */}
+            {/* <div className="brand-text">
+              <span className="brand-title">AIViz Study</span> */}
               {/* <span className="brand-sub">Conceptual Modeling</span> */}
-            </div>
+            {/* </div> */}
           </div>
           <button className="sidebar-close-btn" onClick={onClose} aria-label="Close sidebar">
             <X size={18} />
