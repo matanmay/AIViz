@@ -3,7 +3,8 @@ import Message from './Message';
 import MessageInput from './MessageInput';
 import SubmitDiagramModal from './SubmitDiagramModal';
 import FeedbackModal from './FeedbackModal';
-import { Bot, Edit3, Check, X, Download, AlertCircle, ExternalLink } from 'lucide-react';
+import TemplateModal from './TemplateModal';
+import { Bot, Edit3, Check, X, Download, AlertCircle, ExternalLink, Sparkles } from 'lucide-react';
 
 export default function ChatWindow({
   activeChat,
@@ -32,6 +33,7 @@ export default function ChatWindow({
   const [submitWarning, setSubmitWarning] = useState(false);
   const [openSubmitAfterFeedback, setOpenSubmitAfterFeedback] = useState(false);
   const [showUsabilityBanner, setShowUsabilityBanner] = useState(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
   // Stable callback — avoids re-rendering React.memo(Message) on every keystroke
   const handleOpenFeedback = useCallback((targetMsg) => setFeedbackTargetMessage(targetMsg), []);
@@ -281,6 +283,18 @@ export default function ChatWindow({
               <p className="empty-subtitle">
                 Welcome to the course LLM assistant. Start by typing your question below.
               </p>
+              <div className="empty-template-action-wrap">
+                <button
+                  type="button"
+                  className="empty-template-cta-btn"
+                  onClick={() => setIsTemplateModalOpen(true)}
+                  disabled={awaitingFeedback}
+                  title="Choose and execute a prompt template"
+                >
+                  <Sparkles size={16} />
+                  <span>Choose a Prompt Template (תבניות פרומפט)</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -352,8 +366,24 @@ export default function ChatWindow({
               : 'Write your prompt... (Enter to send, Shift+Enter for new line)'
           }
           onSubmitDiagram={handleSubmitDiagramClick}
+          onOpenTemplates={() => setIsTemplateModalOpen(true)}
         />
       </footer>
+
+      {/* Prompt Templates Modal */}
+      <TemplateModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onInsertPrompt={(prompt) => {
+          setInput(prompt);
+        }}
+        onExecutePrompt={(prompt) => {
+          onSend(0, null, prompt);
+        }}
+        isLoading={isLoading}
+        disabled={awaitingFeedback}
+        awaitingFeedback={awaitingFeedback}
+      />
 
       {/* Submit Diagram Modal */}
       <SubmitDiagramModal

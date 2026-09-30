@@ -491,10 +491,11 @@ export default function App() {
   };
 
   // Send message handler (with drafting duration telemetry & optional file attachment)
-  const handleSend = async (draftingDurationMs = 0, attachment = null) => {
-    if ((!input.trim() && !attachment) || isLoading) return;
+  const handleSend = async (draftingDurationMs = 0, attachment = null, promptOverride = null) => {
+    const textToSend = (promptOverride != null ? promptOverride : input).trim();
+    if ((!textToSend && !attachment) || isLoading) return;
 
-    const userPrompt = input.trim();
+    const userPrompt = textToSend;
     setInput('');
 
     // If an attachment is provided, try uploading to Supabase Storage

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ArrowUp, Loader2, Paperclip, X, Image as ImageIcon, Send } from 'lucide-react';
+import { ArrowUp, Loader2, Paperclip, X, Image as ImageIcon, Send, Sparkles } from 'lucide-react';
 
 export default function MessageInput({
   input,
@@ -10,6 +10,7 @@ export default function MessageInput({
   disabled = false,
   awaitingFeedback = false,
   onSubmitDiagram,
+  onOpenTemplates,
 }) {
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -195,6 +196,21 @@ export default function MessageInput({
               >
                 <ImageIcon size={18} />
               </button>
+
+              {onOpenTemplates && (
+                <button
+                  type="button"
+                  className="template-picker-btn"
+                  onClick={onOpenTemplates}
+                  disabled={disabled || isLoading}
+                  title="Choose and execute a prompt template (תבניות פרומפט)"
+                  aria-label="Prompt Templates"
+                >
+                  <Sparkles size={15} />
+                  <span>Templates</span>
+                </button>
+              )}
+
               <span className="char-count">
                 {input.length > 0 && `${input.length} chars`}
               </span>
