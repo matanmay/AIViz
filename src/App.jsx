@@ -23,6 +23,7 @@ import {
   isSupabaseConfigured,
   getCurrentUser,
   getRemainingImagesFromDB,
+  getImageQuotaFromDB,
   getPromptQuotaFromDB,
   logoutUser,
   subscribeToAuthChanges,
@@ -181,6 +182,12 @@ export default function App() {
     () => (typeof currentUser?.remaining_images === 'number' ? currentUser.remaining_images : null)
   );
 
+  const [dbMaxImages, setDbMaxImages] = useState(
+    () => (typeof currentUser?.max_images === 'number' ? currentUser.max_images : 3)
+  );
+
+  const maxImages = typeof dbMaxImages === 'number' ? dbMaxImages : 3;
+
   const [dbRemainingPrompts, setDbRemainingPrompts] = useState(
     () => (typeof currentUser?.remaining_prompts === 'number' ? currentUser.remaining_prompts : null)
   );
@@ -198,6 +205,9 @@ export default function App() {
     if (typeof currentUser?.remaining_images === 'number') {
       setDbRemainingImages(currentUser.remaining_images);
     }
+    if (typeof currentUser?.max_images === 'number') {
+      setDbMaxImages(currentUser.max_images);
+    }
     if (typeof currentUser?.remaining_prompts === 'number') {
       setDbRemainingPrompts(currentUser.remaining_prompts);
     }
@@ -206,14 +216,20 @@ export default function App() {
     }
 
     if (isSupabaseConfigured() && currentUser?.team_name) {
-      getRemainingImagesFromDB(currentUser.team_name).then((rem) => {
-        if (!isCancelled && typeof rem === 'number') {
-          setDbRemainingImages(rem);
-          const userKey = currentUser.team_name;
-          const used = Math.max(0, 3 - rem);
-          try {
-            localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(used));
-          } catch (e) {}
+      getImageQuotaFromDB(currentUser.team_name).then(({ remaining, maxImages: dbMaxI }) => {
+        if (!isCancelled) {
+          if (typeof remaining === 'number') {
+            setDbRemainingImages(remaining);
+            const userKey = currentUser.team_name;
+            const curMax = typeof dbMaxI === 'number' ? dbMaxI : 3;
+            const used = Math.max(0, curMax - remaining);
+            try {
+              localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(used));
+            } catch (e) {}
+          }
+          if (typeof dbMaxI === 'number') {
+            setDbMaxImages(dbMaxI);
+          }
         }
       });
 
@@ -234,7 +250,7 @@ export default function App() {
   const userImageCount = useMemo(() => {
     // 1. If DB remaining_images is known, DB is the absolute ground truth!
     if (typeof dbRemainingImages === 'number') {
-      return Math.max(0, 3 - dbRemainingImages);
+      return Math.max(0, maxImages - dbRemainingImages);
     }
 
     // 2. Fallback: count from messagesMap in current session
@@ -252,7 +268,7 @@ export default function App() {
     }
 
     return countFromMessages;
-  }, [messagesMap, dbRemainingImages]);
+  }, [messagesMap, dbRemainingImages, maxImages]);
 
   // Real-time user prompt count from current session messages
   const promptsCountFromMessages = useMemo(() => {
@@ -669,7 +685,7 @@ export default function App() {
         ? attachment.type.startsWith('image/')
         : /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(attachment.name || '');
 
-      let currentRemaining = typeof dbRemainingImages === 'number' ? dbRemainingImages : (3 - userImageCount);
+      let currentRemaining = typeof dbRemainingImages === 'number' ? dbRemainingImages : (maxImages - userImageCount);
       if (isSupabaseConfigured() && currentUser?.team_name) {
         const liveRemaining = await getRemainingImagesFromDB(currentUser.team_name);
         if (typeof liveRemaining === 'number') {
@@ -679,7 +695,7 @@ export default function App() {
       }
 
       if (currentRemaining <= 0) {
-        alert('You have reached the maximum limit of 3 images per user in the database. The message will be sent without an image.');
+        alert(`You have reached the maximum limit of ${maxImages} images per user in the database. The message will be sent without an image.`);
         processedAttachment = null;
       } else if (!isImg) {
         alert('Only image files are allowed (PNG, JPG, WebP, SVG, etc.).');
@@ -715,10 +731,10 @@ export default function App() {
     // Update persistent user image count in state & localStorage
     if (processedAttachment) {
       const userKey = currentUser?.team_name || currentUser?.id || currentUser?.username || 'guest';
-      const nextRemaining = Math.max(0, (dbRemainingImages ?? (3 - userImageCount)) - 1);
+      const nextRemaining = Math.max(0, (dbRemainingImages ?? (maxImages - userImageCount)) - 1);
       setDbRemainingImages(nextRemaining);
       try {
-        localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(3 - nextRemaining));
+        localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(maxImages - nextRemaining));
       } catch (e) {}
 
       // Refresh remaining images count from DB
@@ -1105,7 +1121,7 @@ export default function App() {
           gamificationState={gamificationState}
           onDismissNudge={handleDismissNudge}
           userImageCount={userImageCount}
-          maxImages={3}
+          maxImages={maxImages}
           remainingPrompts={remainingPrompts}
           maxPrompts={maxPrompts}
         />

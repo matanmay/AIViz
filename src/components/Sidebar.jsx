@@ -7,7 +7,7 @@ import {
   Sun,
   Database,
   X,
-  Bot,
+  // Bot,
   LogOut,
   User,
   Edit3,

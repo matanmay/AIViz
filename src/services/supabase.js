@@ -78,7 +78,7 @@ export const loginUser = async (teamName, password) => {
   try {
     const { data, error } = await client
       .from('teams')
-      .select('team_name, password, model, remaining_images, remaining_prompts, max_prompts')
+      .select('team_name, password, model, remaining_images, max_images, remaining_prompts, max_prompts')
       .eq('team_name', trimmedName)
       .single();
 
@@ -98,6 +98,7 @@ export const loginUser = async (teamName, password) => {
       email: data.team_name,
       model: data.model || 'gemini-3.5-flash-lite',
       remaining_images: typeof data.remaining_images === 'number' ? data.remaining_images : 3,
+      max_images: typeof data.max_images === 'number' ? data.max_images : 3,
       remaining_prompts: typeof data.remaining_prompts === 'number' ? data.remaining_prompts : 100,
       max_prompts: typeof data.max_prompts === 'number' ? data.max_prompts : 100,
     };
@@ -136,7 +137,7 @@ export const getCurrentUser = async () => {
       try {
         const { data: teamRow } = await client
           .from('teams')
-          .select('model, remaining_images, remaining_prompts, max_prompts')
+          .select('model, remaining_images, max_images, remaining_prompts, max_prompts')
           .eq('team_name', teamName)
           .single();
 
@@ -144,6 +145,9 @@ export const getCurrentUser = async () => {
           if (teamRow.model) session.model = teamRow.model;
           if (typeof teamRow.remaining_images === 'number') {
             session.remaining_images = teamRow.remaining_images;
+          }
+          if (typeof teamRow.max_images === 'number') {
+            session.max_images = teamRow.max_images;
           }
           if (typeof teamRow.remaining_prompts === 'number') {
             session.remaining_prompts = teamRow.remaining_prompts;
@@ -301,44 +305,61 @@ export const getUserImageCountFromDB = async (teamName) => {
 };
 
 /**
- * Query DB for exact number of remaining images for this team/user.
- * Reads directly from teams.remaining_images, with fallback to RPC / messages table count.
+ * Query DB for image quota info (remaining_images and configurable max_images).
+ * Allows modifying max_images in the DB per team at any time.
  */
-export const getRemainingImagesFromDB = async (teamName) => {
+export const getImageQuotaFromDB = async (teamName) => {
   const client = getSupabaseClient();
-  if (!client || !teamName) return null;
+  if (!client || !teamName) return { remaining: null, maxImages: 3 };
 
   try {
-    // 1. Try reading remaining_images column from teams table
     const { data: teamData, error: teamErr } = await client
       .from('teams')
-      .select('remaining_images')
+      .select('remaining_images, max_images')
       .eq('team_name', teamName)
       .single();
 
+    const maxImages = typeof teamData?.max_images === 'number' ? teamData.max_images : 3;
+
     if (!teamErr && teamData && typeof teamData.remaining_images === 'number') {
-      return teamData.remaining_images;
+      return { remaining: teamData.remaining_images, maxImages };
     }
 
-    // 2. Try RPC function if defined in DB
+    // Try RPC function if defined in DB
     const { data: rpcCount, error: rpcErr } = await client.rpc('get_remaining_images', {
       p_team_name: teamName,
     });
     if (!rpcErr && typeof rpcCount === 'number') {
-      return rpcCount;
+      return { remaining: rpcCount, maxImages };
     }
 
-    // 3. Fallback: compute 3 - used images from messages table
+    // Fallback: compute maxImages - used images from messages table
     const usedCount = await getUserImageCountFromDB(teamName);
     if (typeof usedCount === 'number') {
-      return Math.max(0, 3 - usedCount);
+      const remaining = Math.max(0, maxImages - usedCount);
+      client
+        .from('teams')
+        .update({ remaining_images: remaining })
+        .eq('team_name', teamName)
+        .then(() => {})
+        .catch(() => {});
+      return { remaining, maxImages };
     }
 
-    return null;
+    return { remaining: null, maxImages };
   } catch (err) {
-    console.warn('Failed to query remaining images from DB:', err);
-    return null;
+    console.warn('Failed to query image quota from DB:', err);
+    return { remaining: null, maxImages: 3 };
   }
+};
+
+/**
+ * Query DB for exact number of remaining images for this team/user.
+ * Reads directly from teams.remaining_images, with fallback to RPC / messages table count.
+ */
+export const getRemainingImagesFromDB = async (teamName) => {
+  const quota = await getImageQuotaFromDB(teamName);
+  return quota.remaining;
 };
 
 /**
@@ -559,16 +580,24 @@ export const logCompleteInteraction = async ({
 
         // Direct DB update for remaining_images as a fallback in case trigger is not yet installed
         if (teamName) {
-          getRemainingImagesFromDB(teamName).then((rem) => {
-            if (typeof rem === 'number') {
-              client
+          (async () => {
+            try {
+              const { data: teamRow } = await client
                 .from('teams')
-                .update({ remaining_images: Math.max(0, rem - 1) })
+                .select('max_images')
                 .eq('team_name', teamName)
-                .then(() => {})
-                .catch(() => {});
+                .single();
+              const maxI = typeof teamRow?.max_images === 'number' ? teamRow.max_images : 3;
+              const usedImages = await getUserImageCountFromDB(teamName);
+              const count = typeof usedImages === 'number' ? usedImages : 0;
+              await client
+                .from('teams')
+                .update({ remaining_images: Math.max(0, maxI - count) })
+                .eq('team_name', teamName);
+            } catch (syncErr) {
+              console.warn('Fallback sync remaining_images notice:', syncErr);
             }
-          }).catch(() => {});
+          })();
         }
       }
     }
@@ -962,7 +991,7 @@ export const fetchAllTeams = async () => {
   try {
     const { data: teams, error } = await client
       .from('teams')
-      .select('team_name, model, created_at')
+      .select('team_name, model, max_images, remaining_images, max_prompts, remaining_prompts, created_at')
       .order('team_name', { ascending: true });
 
     if (error) throw error;
@@ -971,6 +1000,10 @@ export const fetchAllTeams = async () => {
       team_name: t.team_name,
       username: t.team_name,
       model: t.model || 'gemini-3.5-flash-lite',
+      max_images: typeof t.max_images === 'number' ? t.max_images : 3,
+      remaining_images: typeof t.remaining_images === 'number' ? t.remaining_images : 3,
+      max_prompts: typeof t.max_prompts === 'number' ? t.max_prompts : 100,
+      remaining_prompts: typeof t.remaining_prompts === 'number' ? t.remaining_prompts : 100,
       created_at: t.created_at,
     }));
   } catch (err) {

@@ -4,17 +4,25 @@
 -- Safe to re-run: uses IF NOT EXISTS, IF EXISTS guards and ON CONFLICT handling
 -- ============================================================================
 
--- 0. Teams table (stores group/user credentials and designated LLM model)
+-- 0. Teams table (stores group/user credentials, limits, and designated LLM model)
 CREATE TABLE IF NOT EXISTS teams (
     team_name TEXT PRIMARY KEY,
     password  TEXT NOT NULL,
     story TEXT,
     model     TEXT NOT NULL DEFAULT 'gemini-3.5-flash-lite',
+    max_images INTEGER DEFAULT 3,
+    remaining_images INTEGER DEFAULT 3,
+    max_prompts INTEGER DEFAULT 100,
+    remaining_prompts INTEGER DEFAULT 100,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Migration: Add model column to teams if it does not exist
+-- Migration: Add columns to teams if they do not exist
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS model TEXT NOT NULL DEFAULT 'gemini-3.5-flash-lite';
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS max_images INTEGER DEFAULT 3;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS remaining_images INTEGER DEFAULT 3;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS max_prompts INTEGER DEFAULT 100;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS remaining_prompts INTEGER DEFAULT 100;
 
 -- Clean up any redundant users table if previously created
 DROP TABLE IF EXISTS users CASCADE;
@@ -221,18 +229,70 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_id TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_name TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_params JSONB;
 
--- 15. DB-Level Constraint & Remaining Images Tracking
--- Stores the exact number of remaining images allowed for each team/user (default 3)
+-- 15. DB-Level Constraint & Remaining Images Tracking (Configurable per Team in DB)
+-- Stores the maximum allowed images and remaining images for each team/user (default 3)
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS max_images INTEGER DEFAULT 3;
 ALTER TABLE teams ADD COLUMN IF NOT EXISTS remaining_images INTEGER DEFAULT 3;
-UPDATE teams SET remaining_images = 3 WHERE remaining_images IS NULL;
 
+-- Sync existing teams with max_images (default 3) and actual remaining count
+UPDATE teams SET max_images = 3 WHERE max_images IS NULL;
+
+UPDATE teams t
+SET remaining_images = GREATEST(0, COALESCE(t.max_images, 3) - COALESCE(
+    (SELECT COUNT(*) FROM messages m
+     WHERE m.team_name = t.team_name
+       AND (m.attachment_url IS NOT NULL OR m.attachment_name IS NOT NULL OR m.attachment_data IS NOT NULL)), 0
+))
+WHERE remaining_images IS NULL;
+
+-- Trigger to automatically recalculate remaining_images whenever max_images is modified in the DB
+CREATE OR REPLACE FUNCTION sync_team_max_images()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_count INTEGER;
+    configured_max INTEGER;
+BEGIN
+    configured_max := COALESCE(NEW.max_images, 3);
+
+    -- Only recalculate if max_images changed or on new team insert
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND OLD.max_images IS DISTINCT FROM NEW.max_images) THEN
+        SELECT COUNT(*)
+        INTO current_count
+        FROM messages
+        WHERE team_name = NEW.team_name
+          AND (attachment_url IS NOT NULL OR attachment_name IS NOT NULL OR attachment_data IS NOT NULL);
+
+        NEW.remaining_images := GREATEST(0, configured_max - current_count);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_team_max_images ON teams;
+CREATE TRIGGER trg_sync_team_max_images
+    BEFORE INSERT OR UPDATE ON teams
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_team_max_images();
+
+-- Trigger function to check and enforce configurable image limit at DB level
 CREATE OR REPLACE FUNCTION check_team_image_limit()
 RETURNS TRIGGER AS $$
 DECLARE
     current_image_count INTEGER;
+    team_max_limit INTEGER := 3;
 BEGIN
     -- Only check if this row contains an attachment
     IF (NEW.attachment_url IS NOT NULL OR NEW.attachment_name IS NOT NULL OR NEW.attachment_data IS NOT NULL) THEN
+        -- Read the configured max_images for this specific team from DB (default 3)
+        SELECT COALESCE(max_images, 3)
+        INTO team_max_limit
+        FROM teams
+        WHERE team_name = NEW.team_name;
+
+        IF team_max_limit IS NULL THEN
+            team_max_limit := 3;
+        END IF;
+
         -- Count existing messages with attachments for this team (excluding the current row if updating)
         SELECT COUNT(*)
         INTO current_image_count
@@ -241,16 +301,16 @@ BEGIN
           AND (attachment_url IS NOT NULL OR attachment_name IS NOT NULL OR attachment_data IS NOT NULL)
           AND id <> NEW.id;
 
-        IF current_image_count >= 3 THEN
+        IF current_image_count >= team_max_limit THEN
             -- Ensure remaining_images is 0 in teams
             UPDATE teams SET remaining_images = 0 WHERE team_name = NEW.team_name;
-            RAISE EXCEPTION 'Image upload limit reached: Team/User "%" already has % image attachments (0 remaining images).',
-                NEW.team_name, current_image_count;
+            RAISE EXCEPTION 'Image upload limit reached: Team/User "%" already has % image attachments (0 remaining images out of limit %).',
+                NEW.team_name, current_image_count, team_max_limit;
         END IF;
 
         -- Automatically sync remaining_images column on the teams table
         UPDATE teams
-        SET remaining_images = GREATEST(0, 3 - (current_image_count + 1))
+        SET remaining_images = GREATEST(0, team_max_limit - (current_image_count + 1))
         WHERE team_name = NEW.team_name;
     END IF;
     RETURN NEW;
@@ -268,8 +328,18 @@ CREATE OR REPLACE FUNCTION restore_team_image_limit()
 RETURNS TRIGGER AS $$
 DECLARE
     current_image_count INTEGER;
+    team_max_limit INTEGER := 3;
 BEGIN
     IF (OLD.attachment_url IS NOT NULL OR OLD.attachment_name IS NOT NULL OR OLD.attachment_data IS NOT NULL) THEN
+        SELECT COALESCE(max_images, 3)
+        INTO team_max_limit
+        FROM teams
+        WHERE team_name = OLD.team_name;
+
+        IF team_max_limit IS NULL THEN
+            team_max_limit := 3;
+        END IF;
+
         SELECT COUNT(*)
         INTO current_image_count
         FROM messages
@@ -277,7 +347,7 @@ BEGIN
           AND (attachment_url IS NOT NULL OR attachment_name IS NOT NULL OR attachment_data IS NOT NULL);
 
         UPDATE teams
-        SET remaining_images = LEAST(3, GREATEST(0, 3 - current_image_count))
+        SET remaining_images = LEAST(team_max_limit, GREATEST(0, team_max_limit - current_image_count))
         WHERE team_name = OLD.team_name;
     END IF;
     RETURN OLD;
@@ -290,17 +360,22 @@ CREATE TRIGGER trg_restore_team_image_limit
     FOR EACH ROW
     EXECUTE FUNCTION restore_team_image_limit();
 
--- Helper function to fetch remaining images directly
+-- Helper function to fetch remaining images directly from DB (using team's max_images)
 CREATE OR REPLACE FUNCTION get_remaining_images(p_team_name TEXT)
 RETURNS INTEGER AS $$
 DECLARE
     rem INTEGER;
+    team_max_limit INTEGER := 3;
 BEGIN
-    SELECT remaining_images INTO rem FROM teams WHERE team_name = p_team_name;
+    SELECT remaining_images, COALESCE(max_images, 3)
+    INTO rem, team_max_limit
+    FROM teams
+    WHERE team_name = p_team_name;
+
     IF rem IS NOT NULL THEN
         RETURN rem;
     END IF;
-    RETURN GREATEST(0, 3 - (
+    RETURN GREATEST(0, team_max_limit - (
         SELECT COUNT(*)::INTEGER
         FROM messages
         WHERE team_name = p_team_name
