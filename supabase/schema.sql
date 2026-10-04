@@ -221,3 +221,48 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_id TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_name TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS template_params JSONB;
 
+-- 15. DB-Level Constraint: Enforce maximum 3 image attachments per team/user
+CREATE OR REPLACE FUNCTION check_team_image_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_image_count INTEGER;
+BEGIN
+    -- Only check if this row contains an attachment
+    IF (NEW.attachment_url IS NOT NULL OR NEW.attachment_name IS NOT NULL OR NEW.attachment_data IS NOT NULL) THEN
+        -- Count existing messages with attachments for this team (excluding the current row if updating)
+        SELECT COUNT(*)
+        INTO current_image_count
+        FROM messages
+        WHERE team_name = NEW.team_name
+          AND (attachment_url IS NOT NULL OR attachment_name IS NOT NULL OR attachment_data IS NOT NULL)
+          AND id <> NEW.id;
+
+        IF current_image_count >= 3 THEN
+            RAISE EXCEPTION 'Image upload limit reached: Team/User "%" already has % image attachments (maximum 3 allowed).',
+                NEW.team_name, current_image_count;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_team_image_limit ON messages;
+CREATE TRIGGER trg_check_team_image_limit
+    BEFORE INSERT OR UPDATE ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION check_team_image_limit();
+
+-- Helper function to fetch exact user/team image count
+CREATE OR REPLACE FUNCTION get_user_image_count(p_team_name TEXT)
+RETURNS INTEGER AS $$
+BEGIN
+    RETURN (
+        SELECT COUNT(*)::INTEGER
+        FROM messages
+        WHERE team_name = p_team_name
+          AND (attachment_url IS NOT NULL OR attachment_name IS NOT NULL OR attachment_data IS NOT NULL)
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+

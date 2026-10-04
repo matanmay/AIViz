@@ -242,6 +242,53 @@ export const logMessageToSupabase = async (message, teamName = null) => {
 };
 
 /**
+ * Query DB for exact count of images uploaded by this team/user.
+ * Checks the messages table directly.
+ */
+export const getUserImageCountFromDB = async (teamName) => {
+  const client = getSupabaseClient();
+  if (!client || !teamName) return null;
+
+  try {
+    // 1. Try RPC function if defined in DB
+    const { data: rpcCount, error: rpcErr } = await client.rpc('get_user_image_count', {
+      p_team_name: teamName,
+    });
+    if (!rpcErr && typeof rpcCount === 'number') {
+      return rpcCount;
+    }
+
+    // 2. Query messages table directly
+    const { count, error } = await client
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('team_name', teamName)
+      .or('attachment_url.not.is.null,attachment_name.not.is.null,attachment_data.not.is.null');
+
+    if (!error && typeof count === 'number') {
+      return count;
+    }
+
+    // 3. Fallback select
+    const { data, error: selectErr } = await client
+      .from('messages')
+      .select('attachment_url, attachment_name, attachment_data')
+      .eq('team_name', teamName);
+
+    if (!selectErr && data) {
+      return data.filter(
+        (r) => r.attachment_url || r.attachment_name || r.attachment_data
+      ).length;
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Failed to query user image count from Supabase DB:', err);
+    return null;
+  }
+};
+
+/**
  * Upload a file/image attachment to Supabase Storage.
  * Attempts to upload to 'chat-attachments' bucket.
  * Returns { url, path, name, type, size } on success, or null if storage is not available.
@@ -260,6 +307,15 @@ export const uploadAttachmentToSupabase = async (file, teamName = null) => {
   if (!isImage) {
     console.warn('Non-image file rejected, skipping Supabase upload');
     return null;
+  }
+
+  // Enforce DB-level maximum of 3 images before uploading to Storage
+  if (teamName) {
+    const currentDbCount = await getUserImageCountFromDB(teamName);
+    if (currentDbCount !== null && currentDbCount >= 3) {
+      console.warn(`Storage upload rejected: User "${teamName}" has reached the maximum DB limit of 3 images.`);
+      return null;
+    }
   }
 
   try {
@@ -343,13 +399,26 @@ export const logCompleteInteraction = async ({
       payload.tokens = assistantMessage.tokens || null;
     }
 
-    // Attach file/image metadata if present
+    // Attach file/image metadata if present (strictly limited to 3 images max per team in DB)
+    let shouldLogAttachmentTelemetry = false;
     if (userMessage.attachment) {
-      payload.attachment_url = userMessage.attachment.url || null;
-      payload.attachment_name = userMessage.attachment.name || null;
-      payload.attachment_type = userMessage.attachment.type || null;
-      if (userMessage.attachment.dataUrl && userMessage.attachment.dataUrl.length < 500000) {
-        payload.attachment_data = userMessage.attachment.dataUrl;
+      let isWithinDbQuota = true;
+      if (teamName) {
+        const currentDbCount = await getUserImageCountFromDB(teamName);
+        if (currentDbCount !== null && currentDbCount >= 3) {
+          isWithinDbQuota = false;
+          console.warn(`DB quota reached: team "${teamName}" already has ${currentDbCount} images in DB. Skipping attachment persistence.`);
+        }
+      }
+
+      if (isWithinDbQuota) {
+        shouldLogAttachmentTelemetry = true;
+        payload.attachment_url = userMessage.attachment.url || null;
+        payload.attachment_name = userMessage.attachment.name || null;
+        payload.attachment_type = userMessage.attachment.type || null;
+        if (userMessage.attachment.dataUrl && userMessage.attachment.dataUrl.length < 500000) {
+          payload.attachment_data = userMessage.attachment.dataUrl;
+        }
       }
     }
 
@@ -385,8 +454,8 @@ export const logCompleteInteraction = async ({
       return false;
     }
 
-    // Always log attachment event to experiment_logs (accepts arbitrary JSON)
-    if (userMessage.attachment) {
+    // Always log attachment event to experiment_logs if allowed by DB quota
+    if (shouldLogAttachmentTelemetry && userMessage.attachment) {
       try {
         await client.from('experiment_logs').insert([
           {

@@ -22,6 +22,7 @@ import {
   deleteChatFromSupabase,
   isSupabaseConfigured,
   getCurrentUser,
+  getUserImageCountFromDB,
   logoutUser,
   subscribeToAuthChanges,
   updateMessageFeedback,
@@ -175,7 +176,9 @@ export default function App() {
     }
   }, [messagesMap, currentUser]);
 
-  // Calculate total images uploaded by the user (max 3 images total per user)
+  const [dbImageCount, setDbImageCount] = useState(null);
+
+  // Calculate total images uploaded by the user (max 3 images total per user, synced with DB)
   const userImageCount = useMemo(() => {
     const userKey = currentUser?.team_name || currentUser?.id || currentUser?.username || 'guest';
     let countFromMessages = 0;
@@ -197,14 +200,14 @@ export default function App() {
       if (val !== null) storedCount = parseInt(val, 10) || 0;
     } catch (e) {}
 
-    const total = Math.max(countFromMessages, storedCount);
-    if (countFromMessages > storedCount) {
+    const total = Math.max(countFromMessages, storedCount, dbImageCount ?? 0);
+    if (total > storedCount) {
       try {
         localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(total));
       } catch (e) {}
     }
     return total;
-  }, [messagesMap, currentUser]);
+  }, [messagesMap, currentUser, dbImageCount]);
 
   // Load user chats and messages whenever currentUser changes (login / user switch)
   useEffect(() => {
@@ -253,8 +256,14 @@ export default function App() {
         }
       }
 
-      // 2. Fetch fresh user chats from Supabase if configured
+      // 2. Fetch fresh user chats and image count from Supabase if configured
       if (isSupabaseConfigured() && currentUser.team_name) {
+        getUserImageCountFromDB(currentUser.team_name).then((count) => {
+          if (!isCancelled && typeof count === 'number') {
+            setDbImageCount(count);
+          }
+        });
+
         try {
           const remoteChats = await fetchChatsFromSupabase(currentUser.team_name);
           if (isCancelled) return;
@@ -558,7 +567,7 @@ export default function App() {
     const userPrompt = textToSend;
     setInput('');
 
-    // Enforce image restrictions: only images, max 3MB, max 3 total per user
+    // Enforce image restrictions: only images, max 3MB, max 3 total per user (verified with DB)
     let processedAttachment = attachment;
     if (attachment) {
       const maxUserImages = 3;
@@ -567,8 +576,17 @@ export default function App() {
         ? attachment.type.startsWith('image/')
         : /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(attachment.name || '');
 
-      if (userImageCount >= maxUserImages) {
-        alert('You have reached the maximum limit of 3 images per user. The message will be sent without an image.');
+      let currentTotalCount = userImageCount;
+      if (isSupabaseConfigured() && currentUser?.team_name) {
+        const liveDbCount = await getUserImageCountFromDB(currentUser.team_name);
+        if (typeof liveDbCount === 'number') {
+          currentTotalCount = Math.max(currentTotalCount, liveDbCount);
+          setDbImageCount(liveDbCount);
+        }
+      }
+
+      if (currentTotalCount >= maxUserImages) {
+        alert('You have reached the maximum limit of 3 images per user in the database. The message will be sent without an image.');
         processedAttachment = null;
       } else if (!isImg) {
         alert('Only image files are allowed (PNG, JPG, WebP, SVG, etc.).');
@@ -601,10 +619,11 @@ export default function App() {
       }
     }
 
-    // Update persistent user image count in localStorage
+    // Update persistent user image count in state & localStorage
     if (processedAttachment) {
       const userKey = currentUser?.team_name || currentUser?.id || currentUser?.username || 'guest';
       const nextCount = userImageCount + 1;
+      setDbImageCount(nextCount);
       try {
         localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(nextCount));
       } catch (e) {}
