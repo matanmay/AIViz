@@ -13,6 +13,8 @@ export default function MessageInput({
   onOpenTemplates,
   userImageCount = 0,
   maxImages = 3,
+  remainingPrompts = 100,
+  maxPrompts = 100,
 }) {
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -22,6 +24,7 @@ export default function MessageInput({
   const [errorMessage, setErrorMessage] = useState(null);
 
   const isQuotaExceeded = userImageCount >= maxImages;
+  const isPromptQuotaExceeded = remainingPrompts <= 0;
   const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024; // 3MB
 
   // Auto-clear error after 6 seconds
@@ -67,6 +70,12 @@ export default function MessageInput({
   // Validate and process file into attachment state with dataUrl
   const processFile = (file) => {
     if (!file) return;
+
+    if (isPromptQuotaExceeded) {
+      showError('You have reached the maximum limit of 100 prompts. No more prompts can be sent.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     // 1. Enforce user total image limit (max 3 images total per user)
     if (isQuotaExceeded) {
@@ -158,7 +167,7 @@ export default function MessageInput({
   // Drag and drop image onto input
   const handleDrop = (e) => {
     e.preventDefault();
-    if (disabled || isLoading) return;
+    if (disabled || isLoading || isPromptQuotaExceeded) return;
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
 
@@ -175,6 +184,10 @@ export default function MessageInput({
   };
 
   const handleAttachClick = () => {
+    if (isPromptQuotaExceeded) {
+      showError('You have reached the maximum limit of 100 prompts.');
+      return;
+    }
     if (isQuotaExceeded) {
       showError(`You have reached the maximum limit of ${maxImages} images per user.`);
       return;
@@ -195,6 +208,11 @@ export default function MessageInput({
   };
 
   const handleTriggerSend = () => {
+    if (isPromptQuotaExceeded) {
+      showError('You have reached the maximum limit of 100 prompts. No further prompts can be sent.');
+      return;
+    }
+
     const hasText = Boolean(input.trim());
     const hasAttachment = Boolean(attachment);
 
@@ -222,7 +240,7 @@ export default function MessageInput({
     handleTriggerSend();
   };
 
-  const canSend = (input.trim() || attachment) && !isLoading && !disabled;
+  const canSend = !isPromptQuotaExceeded && (input.trim() || attachment) && !isLoading && !disabled;
 
   return (
     <form className="message-input-form" onSubmit={handleSubmit}>
@@ -242,8 +260,17 @@ export default function MessageInput({
             style={{ display: 'none' }}
           />
 
-          {/* Validation Error Banner */}
-          {errorMessage && (
+          {/* Prompt Limit Reached Banner */}
+          {isPromptQuotaExceeded ? (
+            <div className="message-input-quota-banner" role="alert">
+              <div className="quota-banner-content">
+                <AlertCircle size={15} className="quota-banner-icon" />
+                <span className="quota-banner-text">
+                  Prompt limit reached: You have used all 100 prompts allowed for this experiment. You can still export your chat history or submit your final diagram.
+                </span>
+              </div>
+            </div>
+          ) : errorMessage ? (
             <div className="message-input-error-banner" role="alert">
               <div className="error-banner-content">
                 <AlertCircle size={15} className="error-banner-icon" />
@@ -259,7 +286,7 @@ export default function MessageInput({
                 <X size={14} />
               </button>
             </div>
-          )}
+          ) : null}
 
           {/* Attachment Preview Bar */}
           {attachment && (
@@ -297,9 +324,15 @@ export default function MessageInput({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={attachment ? 'Add a message or press Enter to send...' : placeholder}
+            placeholder={
+              isPromptQuotaExceeded
+                ? 'Prompt limit reached (100/100). No further prompts can be sent.'
+                : attachment
+                ? 'Add a message or press Enter to send...'
+                : placeholder
+            }
             rows={1}
-            disabled={disabled || isLoading}
+            disabled={disabled || isLoading || isPromptQuotaExceeded}
             className="chat-textarea"
             aria-label="Conceptual model input message"
           />
@@ -308,11 +341,13 @@ export default function MessageInput({
             <div className="input-left-actions">
               <button
                 type="button"
-                className={`attach-file-btn ${attachment ? 'active' : ''} ${isQuotaExceeded ? 'quota-blocked' : ''}`}
+                className={`attach-file-btn ${attachment ? 'active' : ''} ${isQuotaExceeded || isPromptQuotaExceeded ? 'quota-blocked' : ''}`}
                 onClick={handleAttachClick}
-                disabled={disabled || isLoading}
+                disabled={disabled || isLoading || isPromptQuotaExceeded}
                 title={
-                  isQuotaExceeded
+                  isPromptQuotaExceeded
+                    ? 'Prompt limit reached (100/100)'
+                    : isQuotaExceeded
                     ? `You have reached the maximum limit of ${maxImages} images per user`
                     : `Attach image (${userImageCount}/${maxImages} used - up to 3MB, 1 image per message)`
                 }
@@ -324,10 +359,10 @@ export default function MessageInput({
               {onOpenTemplates && (
                 <button
                   type="button"
-                  className="template-picker-btn"
+                  className={`template-picker-btn ${isPromptQuotaExceeded ? 'quota-blocked' : ''}`}
                   onClick={onOpenTemplates}
-                  disabled={disabled || isLoading}
-                  title="Choose and execute a prompt template"
+                  disabled={disabled || isLoading || isPromptQuotaExceeded}
+                  title={isPromptQuotaExceeded ? 'Prompt limit reached (100/100)' : 'Choose and execute a prompt template'}
                   aria-label="Prompt Templates"
                 >
                   <Sparkles size={15} />
@@ -345,7 +380,13 @@ export default function MessageInput({
               disabled={!canSend}
               className={`send-button ${canSend ? 'active' : ''}`}
               aria-label="Send message"
-              title={isLoading ? 'Generating response...' : 'Send message (Enter)'}
+              title={
+                isPromptQuotaExceeded
+                  ? 'Prompt limit reached (100/100)'
+                  : isLoading
+                  ? 'Generating response...'
+                  : 'Send message (Enter)'
+              }
             >
               {isLoading ? (
                 <Loader2 size={18} className="spinner" />

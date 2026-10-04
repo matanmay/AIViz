@@ -29,6 +29,8 @@ export default function ChatWindow({
   onDismissNudge,
   userImageCount = 0,
   maxImages = 3,
+  remainingPrompts = 100,
+  maxPrompts = 100,
 }) {
   const messagesEndRef = useRef(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -392,6 +394,8 @@ export default function ChatWindow({
           onOpenTemplates={() => setIsTemplateModalOpen(true)}
           userImageCount={userImageCount}
           maxImages={maxImages}
+          remainingPrompts={remainingPrompts}
+          maxPrompts={maxPrompts}
         />
       </footer>
 
@@ -408,8 +412,9 @@ export default function ChatWindow({
           onSend(0, null, prompt, templateMeta);
         }}
         isLoading={isLoading}
-        disabled={awaitingFeedback}
+        disabled={awaitingFeedback || remainingPrompts <= 0}
         awaitingFeedback={awaitingFeedback}
+        isPromptQuotaExceeded={remainingPrompts <= 0}
         gamificationState={gamificationState}
       />
 

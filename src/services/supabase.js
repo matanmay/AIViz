@@ -78,7 +78,7 @@ export const loginUser = async (teamName, password) => {
   try {
     const { data, error } = await client
       .from('teams')
-      .select('team_name, password, model, remaining_images')
+      .select('team_name, password, model, remaining_images, remaining_prompts, max_prompts')
       .eq('team_name', trimmedName)
       .single();
 
@@ -98,6 +98,8 @@ export const loginUser = async (teamName, password) => {
       email: data.team_name,
       model: data.model || 'gemini-3.5-flash-lite',
       remaining_images: typeof data.remaining_images === 'number' ? data.remaining_images : 3,
+      remaining_prompts: typeof data.remaining_prompts === 'number' ? data.remaining_prompts : 100,
+      max_prompts: typeof data.max_prompts === 'number' ? data.max_prompts : 100,
     };
 
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -134,7 +136,7 @@ export const getCurrentUser = async () => {
       try {
         const { data: teamRow } = await client
           .from('teams')
-          .select('model, remaining_images')
+          .select('model, remaining_images, remaining_prompts, max_prompts')
           .eq('team_name', teamName)
           .single();
 
@@ -142,6 +144,12 @@ export const getCurrentUser = async () => {
           if (teamRow.model) session.model = teamRow.model;
           if (typeof teamRow.remaining_images === 'number') {
             session.remaining_images = teamRow.remaining_images;
+          }
+          if (typeof teamRow.remaining_prompts === 'number') {
+            session.remaining_prompts = teamRow.remaining_prompts;
+          }
+          if (typeof teamRow.max_prompts === 'number') {
+            session.max_prompts = teamRow.max_prompts;
           }
           localStorage.setItem(SESSION_KEY, JSON.stringify(session));
         }
@@ -334,6 +342,90 @@ export const getRemainingImagesFromDB = async (teamName) => {
 };
 
 /**
+ * Query DB for exact number of prompts/messages already sent by this team.
+ * Checks the messages table directly.
+ */
+export const getUserPromptCountFromDB = async (teamName) => {
+  const client = getSupabaseClient();
+  if (!client || !teamName) return null;
+
+  try {
+    const { count, error } = await client
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('team_name', teamName);
+
+    if (error) {
+      console.warn('Failed to query user prompt count from messages:', error);
+      return null;
+    }
+
+    return typeof count === 'number' ? count : 0;
+  } catch (err) {
+    console.warn('Failed to query user prompt count from Supabase DB:', err);
+    return null;
+  }
+};
+
+/**
+ * Query DB for prompt quota info (remaining_prompts and configurable max_prompts).
+ * Allows modifying max_prompts in the DB per team at any time.
+ */
+export const getPromptQuotaFromDB = async (teamName) => {
+  const client = getSupabaseClient();
+  if (!client || !teamName) return { remaining: null, maxPrompts: 100 };
+
+  try {
+    const { data: teamData, error: teamErr } = await client
+      .from('teams')
+      .select('remaining_prompts, max_prompts')
+      .eq('team_name', teamName)
+      .single();
+
+    const maxPrompts = typeof teamData?.max_prompts === 'number' ? teamData.max_prompts : 100;
+
+    if (!teamErr && teamData && typeof teamData.remaining_prompts === 'number') {
+      return { remaining: teamData.remaining_prompts, maxPrompts };
+    }
+
+    // Try RPC function if defined in DB
+    const { data: rpcCount, error: rpcErr } = await client.rpc('get_remaining_prompts', {
+      p_team_name: teamName,
+    });
+    if (!rpcErr && typeof rpcCount === 'number') {
+      return { remaining: rpcCount, maxPrompts };
+    }
+
+    // Fallback: compute maxPrompts - used prompts from messages table
+    const usedCount = await getUserPromptCountFromDB(teamName);
+    if (typeof usedCount === 'number') {
+      const remaining = Math.max(0, maxPrompts - usedCount);
+      client
+        .from('teams')
+        .update({ remaining_prompts: remaining })
+        .eq('team_name', teamName)
+        .then(() => {})
+        .catch(() => {});
+      return { remaining, maxPrompts };
+    }
+
+    return { remaining: null, maxPrompts };
+  } catch (err) {
+    console.warn('Failed to query prompt quota from DB:', err);
+    return { remaining: null, maxPrompts: 100 };
+  }
+};
+
+/**
+ * Query DB for exact number of remaining prompts for this team/user.
+ * Reads directly from teams.remaining_prompts, with fallback to RPC / messages table count.
+ */
+export const getRemainingPromptsFromDB = async (teamName) => {
+  const quota = await getPromptQuotaFromDB(teamName);
+  return quota.remaining;
+};
+
+/**
  * Upload a file/image attachment to Supabase Storage.
  * Attempts to upload to 'chat-attachments' bucket.
  * Returns { url, path, name, type, size } on success, or null if storage is not available.
@@ -511,6 +603,35 @@ export const logCompleteInteraction = async ({
     if (error) {
       console.warn('Supabase interaction log error:', error.message, error.details);
       return false;
+    }
+
+    // Automatically update remaining_prompts column on teams if trigger is not yet installed in Supabase
+    if (teamName) {
+      (async () => {
+        try {
+          const { count } = await client
+            .from('messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('team_name', teamName);
+
+          const { data: teamRow } = await client
+            .from('teams')
+            .select('max_prompts')
+            .eq('team_name', teamName)
+            .single();
+
+          const maxP = typeof teamRow?.max_prompts === 'number' ? teamRow.max_prompts : 100;
+          const used = typeof count === 'number' ? count : 0;
+          const newRemaining = Math.max(0, maxP - used);
+
+          await client
+            .from('teams')
+            .update({ remaining_prompts: newRemaining })
+            .eq('team_name', teamName);
+        } catch (syncErr) {
+          console.warn('Fallback sync remaining_prompts notice:', syncErr);
+        }
+      })();
     }
 
     // Always log attachment event to experiment_logs if allowed by DB quota

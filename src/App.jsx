@@ -23,6 +23,7 @@ import {
   isSupabaseConfigured,
   getCurrentUser,
   getRemainingImagesFromDB,
+  getPromptQuotaFromDB,
   logoutUser,
   subscribeToAuthChanges,
   updateMessageFeedback,
@@ -180,12 +181,28 @@ export default function App() {
     () => (typeof currentUser?.remaining_images === 'number' ? currentUser.remaining_images : null)
   );
 
-  // Sync remaining images directly with DB whenever currentUser changes
+  const [dbRemainingPrompts, setDbRemainingPrompts] = useState(
+    () => (typeof currentUser?.remaining_prompts === 'number' ? currentUser.remaining_prompts : null)
+  );
+
+  const [dbMaxPrompts, setDbMaxPrompts] = useState(
+    () => (typeof currentUser?.max_prompts === 'number' ? currentUser.max_prompts : 100)
+  );
+
+  const maxPrompts = typeof dbMaxPrompts === 'number' ? dbMaxPrompts : 100;
+
+  // Sync remaining images and remaining prompts directly with DB whenever currentUser changes
   useEffect(() => {
     let isCancelled = false;
 
     if (typeof currentUser?.remaining_images === 'number') {
       setDbRemainingImages(currentUser.remaining_images);
+    }
+    if (typeof currentUser?.remaining_prompts === 'number') {
+      setDbRemainingPrompts(currentUser.remaining_prompts);
+    }
+    if (typeof currentUser?.max_prompts === 'number') {
+      setDbMaxPrompts(currentUser.max_prompts);
     }
 
     if (isSupabaseConfigured() && currentUser?.team_name) {
@@ -197,6 +214,13 @@ export default function App() {
           try {
             localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(used));
           } catch (e) {}
+        }
+      });
+
+      getPromptQuotaFromDB(currentUser.team_name).then(({ remaining, maxPrompts: dbMax }) => {
+        if (!isCancelled) {
+          if (typeof remaining === 'number') setDbRemainingPrompts(remaining);
+          if (typeof dbMax === 'number') setDbMaxPrompts(dbMax);
         }
       });
     }
@@ -229,6 +253,33 @@ export default function App() {
 
     return countFromMessages;
   }, [messagesMap, dbRemainingImages]);
+
+  // Real-time user prompt count from current session messages
+  const promptsCountFromMessages = useMemo(() => {
+    let count = 0;
+    if (messagesMap && typeof messagesMap === 'object') {
+      Object.values(messagesMap).forEach((msgs) => {
+        if (Array.isArray(msgs)) {
+          msgs.forEach((m) => {
+            if (m?.role === 'user') {
+              count++;
+            }
+          });
+        }
+      });
+    }
+    return count;
+  }, [messagesMap]);
+
+  // Used prompt count combines real-time session messages and DB records
+  const userPromptCount = useMemo(() => {
+    const fromDb = typeof dbRemainingPrompts === 'number' ? Math.max(0, maxPrompts - dbRemainingPrompts) : 0;
+    return Math.max(promptsCountFromMessages, fromDb);
+  }, [promptsCountFromMessages, dbRemainingPrompts, maxPrompts]);
+
+  const remainingPrompts = useMemo(() => {
+    return Math.max(0, maxPrompts - userPromptCount);
+  }, [maxPrompts, userPromptCount]);
 
   // Load user chats and messages whenever currentUser changes (login / user switch)
   useEffect(() => {
@@ -589,6 +640,25 @@ export default function App() {
     if ((!textToSend && !attachment) || isLoading) return;
 
     const userPrompt = textToSend;
+
+    // Enforce prompt limit: maximum configurable prompts per user (verified with DB)
+    let currentRemainingPrompts = typeof dbRemainingPrompts === 'number' ? dbRemainingPrompts : (maxPrompts - userPromptCount);
+    if (isSupabaseConfigured() && currentUser?.team_name) {
+      const quota = await getPromptQuotaFromDB(currentUser.team_name);
+      if (typeof quota.remaining === 'number') {
+        currentRemainingPrompts = quota.remaining;
+        setDbRemainingPrompts(quota.remaining);
+      }
+      if (typeof quota.maxPrompts === 'number') {
+        setDbMaxPrompts(quota.maxPrompts);
+      }
+    }
+
+    if (currentRemainingPrompts <= 0) {
+      alert(`You have reached the maximum limit of ${maxPrompts} prompts for this experiment. No more prompts can be sent.`);
+      return;
+    }
+
     setInput('');
 
     // Enforce image restrictions: only images, max 3MB, max 3 total per user (verified with DB)
@@ -662,6 +732,10 @@ export default function App() {
         }, 1200);
       }
     }
+
+    // Decrement local remaining prompts count
+    const nextRemainingPrompts = Math.max(0, (dbRemainingPrompts ?? (maxPrompts - userPromptCount)) - 1);
+    setDbRemainingPrompts(nextRemainingPrompts);
 
     const userMessage = {
       id: `usr-${Date.now()}`,
@@ -748,6 +822,18 @@ export default function App() {
       }));
       // Require feedback before next prompt
       setAwaitingFeedback(true);
+
+      // Refresh remaining prompts and max prompts from DB after message has been logged
+      if (isSupabaseConfigured() && currentUser?.team_name) {
+        getPromptQuotaFromDB(currentUser.team_name).then(({ remaining, maxPrompts: dbMax }) => {
+          if (typeof remaining === 'number') {
+            setDbRemainingPrompts(remaining);
+          }
+          if (typeof dbMax === 'number') {
+            setDbMaxPrompts(dbMax);
+          }
+        });
+      }
     } catch (error) {
       console.error('Chat error:', error);
       const errorMsg = {
@@ -990,6 +1076,9 @@ export default function App() {
         onLogout={handleLogout}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        userPromptCount={userPromptCount}
+        remainingPrompts={remainingPrompts}
+        maxPrompts={maxPrompts}
       />
 
       {/* Main Chat Area */}
@@ -1017,6 +1106,8 @@ export default function App() {
           onDismissNudge={handleDismissNudge}
           userImageCount={userImageCount}
           maxImages={3}
+          remainingPrompts={remainingPrompts}
+          maxPrompts={maxPrompts}
         />
       </div>
 

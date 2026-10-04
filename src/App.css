@@ -622,6 +622,153 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+/* Sidebar Prompt Quota Card */
+.sidebar-quota-card {
+  margin: 6px 12px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.sidebar-quota-card.warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.sidebar-quota-card.exceeded {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.sidebar-quota-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-quota-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+}
+
+.sidebar-quota-icon {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.sidebar-quota-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.sidebar-quota-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.sidebar-quota-badge.normal {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-primary);
+}
+
+.sidebar-quota-badge.warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.sidebar-quota-badge.exceeded {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.sidebar-quota-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-primary);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.sidebar-quota-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.sidebar-stat-label {
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 500;
+}
+
+.sidebar-stat-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sidebar-stat-value.highlight {
+  color: var(--accent-primary);
+}
+
+.sidebar-quota-card.warning .sidebar-stat-value.highlight {
+  color: #f59e0b;
+}
+
+.sidebar-quota-card.exceeded .sidebar-stat-value.highlight {
+  color: #ef4444;
+}
+
+.sidebar-quota-stat-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-subtle);
+}
+
+.sidebar-quota-progress-track {
+  width: 100%;
+  height: 5px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.sidebar-quota-progress-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+.sidebar-quota-progress-fill.normal {
+  background: var(--accent-gradient, #6366f1);
+}
+
+.sidebar-quota-progress-fill.warning {
+  background: #f59e0b;
+}
+
+.sidebar-quota-progress-fill.exceeded {
+  background: #ef4444;
+}
+
 /* Supabase Status Card */
 .supabase-status-card {
   margin: 6px 12px;
@@ -940,6 +1087,7 @@
   padding: 3px 8px;
   border-radius: var(--radius-full);
 }
+
 
 .clear-chat-btn {
   display: flex;
@@ -1813,6 +1961,67 @@
   background: transparent;
   color: var(--text-muted);
   border-color: transparent;
+}
+
+.template-picker-btn.quota-blocked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.template-picker-btn.quota-blocked:hover {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+}
+
+
+/* Prompt Quota Limit Exceeded Banner */
+.message-input-quota-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.quota-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quota-banner-icon {
+  flex-shrink: 0;
+  color: #ef4444;
+}
+
+.quota-banner-text {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* Template Modal Prompt Quota Alert */
+.template-quota-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(239, 68, 68, 0.12);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  padding: 10px 16px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  animation: fadeIn 0.2s ease;
+}
+
+.template-quota-alert-icon {
+  flex-shrink: 0;
 }
 
 .char-count {

@@ -145,6 +145,7 @@ export default function TemplateModal({
   isLoading = false,
   disabled = false,
   awaitingFeedback = false,
+  isPromptQuotaExceeded = false,
   gamificationState = null,
 }) {
   const [selectedTemplateId, setSelectedTemplateId] = useState(TEMPLATES[0]?.id || 'create-model');
@@ -337,6 +338,14 @@ export default function TemplateModal({
             <X size={18} />
           </button>
         </div>
+
+        {/* Quota Exceeded Alert Banner */}
+        {isPromptQuotaExceeded && (
+          <div className="template-quota-alert" role="alert">
+            <AlertCircle size={16} className="template-quota-alert-icon" />
+            <span>You have reached the maximum limit of 100 prompts for this experiment. Prompt execution is disabled.</span>
+          </div>
+        )}
 
         {/* Modal Body: Left Sidebar + Right Editor */}
         <div className="template-modal-body">
@@ -599,8 +608,8 @@ export default function TemplateModal({
               type="button"
               className="template-insert-btn"
               onClick={handleInsertClick}
-              disabled={isLoading || !previewText}
-              title="Insert prompt into chatbox for review or editing"
+              disabled={isLoading || !previewText || isPromptQuotaExceeded}
+              title={isPromptQuotaExceeded ? 'Prompt limit reached (100/100)' : 'Insert prompt into chatbox for review or editing'}
             >
               <CornerDownLeft size={16} />
               <span>Insert into Input</span>
@@ -610,9 +619,11 @@ export default function TemplateModal({
               type="button"
               className="template-execute-btn"
               onClick={handleExecuteClick}
-              disabled={isLoading || disabled || awaitingFeedback || !previewText}
+              disabled={isLoading || disabled || awaitingFeedback || !previewText || isPromptQuotaExceeded}
               title={
-                awaitingFeedback
+                isPromptQuotaExceeded
+                  ? 'Maximum limit of 100 prompts reached'
+                  : awaitingFeedback
                   ? 'Please rate the AI response before sending new prompts'
                   : 'Send and execute prompt immediately in the chat'
               }

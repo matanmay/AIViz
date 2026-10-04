@@ -309,5 +309,152 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- 16. DB-Level Constraint & Remaining Prompts Tracking (Configurable per Team in DB)
+-- Stores the maximum allowed prompts and remaining prompts for each team/user (default 100)
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS max_prompts INTEGER DEFAULT 100;
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS remaining_prompts INTEGER DEFAULT 100;
 
+-- Sync existing teams with max_prompts (default 100) and actual remaining count
+UPDATE teams SET max_prompts = 100 WHERE max_prompts IS NULL;
+
+UPDATE teams t
+SET remaining_prompts = GREATEST(0, COALESCE(t.max_prompts, 100) - COALESCE(
+    (SELECT COUNT(*) FROM messages m WHERE m.team_name = t.team_name), 0
+))
+WHERE remaining_prompts IS NULL;
+
+-- Trigger to automatically recalculate remaining_prompts whenever max_prompts is modified in the DB
+CREATE OR REPLACE FUNCTION sync_team_max_prompts()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_count INTEGER;
+    configured_max INTEGER;
+BEGIN
+    configured_max := COALESCE(NEW.max_prompts, 100);
+
+    -- Only recalculate if max_prompts changed or on new team insert
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND OLD.max_prompts IS DISTINCT FROM NEW.max_prompts) THEN
+        SELECT COUNT(*)
+        INTO current_count
+        FROM messages
+        WHERE team_name = NEW.team_name;
+
+        NEW.remaining_prompts := GREATEST(0, configured_max - current_count);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_team_max_prompts ON teams;
+CREATE TRIGGER trg_sync_team_max_prompts
+    BEFORE INSERT OR UPDATE ON teams
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_team_max_prompts();
+
+-- Trigger function to check and enforce configurable prompts limit at DB level
+CREATE OR REPLACE FUNCTION check_team_prompt_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_prompt_count INTEGER;
+    team_max_limit INTEGER := 100;
+BEGIN
+    -- Check on new prompt creation (INSERT) or if team ownership changes
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND OLD.team_name IS DISTINCT FROM NEW.team_name) THEN
+        -- Read the configured max_prompts for this specific team from DB (default 100)
+        SELECT COALESCE(max_prompts, 100)
+        INTO team_max_limit
+        FROM teams
+        WHERE team_name = NEW.team_name;
+
+        IF team_max_limit IS NULL THEN
+            team_max_limit := 100;
+        END IF;
+
+        -- Count existing messages for this team (excluding current row if updating)
+        SELECT COUNT(*)
+        INTO current_prompt_count
+        FROM messages
+        WHERE team_name = NEW.team_name
+          AND id <> NEW.id;
+
+        IF current_prompt_count >= team_max_limit THEN
+            -- Ensure remaining_prompts is clamped to 0
+            UPDATE teams SET remaining_prompts = 0 WHERE team_name = NEW.team_name;
+            RAISE EXCEPTION 'Prompt limit reached: Team/User "%" has reached the maximum limit of % prompts (0 remaining).',
+                NEW.team_name, team_max_limit;
+        END IF;
+
+        -- Automatically sync remaining_prompts column on the teams table
+        UPDATE teams
+        SET remaining_prompts = GREATEST(0, team_max_limit - (current_prompt_count + 1))
+        WHERE team_name = NEW.team_name;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_team_prompt_limit ON messages;
+CREATE TRIGGER trg_check_team_prompt_limit
+    BEFORE INSERT OR UPDATE ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION check_team_prompt_limit();
+
+-- Trigger function to restore remaining_prompts if a message is deleted
+CREATE OR REPLACE FUNCTION restore_team_prompt_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+    current_prompt_count INTEGER;
+    team_max_limit INTEGER := 100;
+BEGIN
+    SELECT COALESCE(max_prompts, 100)
+    INTO team_max_limit
+    FROM teams
+    WHERE team_name = OLD.team_name;
+
+    IF team_max_limit IS NULL THEN
+        team_max_limit := 100;
+    END IF;
+
+    SELECT COUNT(*)
+    INTO current_prompt_count
+    FROM messages
+    WHERE team_name = OLD.team_name;
+
+    UPDATE teams
+    SET remaining_prompts = LEAST(team_max_limit, GREATEST(0, team_max_limit - current_prompt_count))
+    WHERE team_name = OLD.team_name;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_restore_team_prompt_limit ON messages;
+CREATE TRIGGER trg_restore_team_prompt_limit
+    AFTER DELETE ON messages
+    FOR EACH ROW
+    EXECUTE FUNCTION restore_team_prompt_limit();
+
+-- Helper function to fetch remaining prompts directly from DB (using team's max_prompts)
+CREATE OR REPLACE FUNCTION get_remaining_prompts(p_team_name TEXT)
+RETURNS INTEGER AS $$
+DECLARE
+    rem INTEGER;
+    team_max_limit INTEGER := 100;
+BEGIN
+    SELECT remaining_prompts, COALESCE(max_prompts, 100)
+    INTO rem, team_max_limit
+    FROM teams
+    WHERE team_name = p_team_name;
+
+    IF rem IS NOT NULL THEN
+        RETURN rem;
+    END IF;
+    RETURN GREATEST(0, team_max_limit - (
+        SELECT COUNT(*)::INTEGER
+        FROM messages
+        WHERE team_name = p_team_name
+    ));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 

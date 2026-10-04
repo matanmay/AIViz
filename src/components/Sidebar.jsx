@@ -29,6 +29,9 @@ export default function Sidebar({
   onClose,
   currentUser,
   onLogout,
+  userPromptCount = 0,
+  remainingPrompts = 100,
+  maxPrompts = 100,
 }) {
   const isConnectedToSupabase = isSupabaseConfigured();
   const [editingChatId, setEditingChatId] = useState(null);
@@ -188,6 +191,45 @@ export default function Sidebar({
                 );
               })
             )}
+          </div>
+        </div>
+
+        {/* Prompt Quota Card */}
+        <div className={`sidebar-quota-card ${remainingPrompts <= 0 ? 'exceeded' : remainingPrompts <= 20 ? 'warning' : ''}`}>
+          <div className="sidebar-quota-header">
+            <div className="sidebar-quota-title-wrap">
+              <MessageSquare size={14} className="sidebar-quota-icon" />
+              <span className="sidebar-quota-title">Prompt Quota</span>
+            </div>
+            <span className={`sidebar-quota-badge ${remainingPrompts <= 0 ? 'exceeded' : remainingPrompts <= 20 ? 'warning' : 'normal'}`}>
+              {remainingPrompts <= 0 ? 'Exceeded' : `${remainingPrompts} left`}
+            </span>
+          </div>
+
+          <div className="sidebar-quota-stats">
+            <div className="sidebar-quota-stat-item">
+              <span className="sidebar-stat-label">Used</span>
+              <span className="sidebar-stat-value">{userPromptCount}</span>
+            </div>
+            <div className="sidebar-quota-stat-divider" />
+            <div className="sidebar-quota-stat-item">
+              <span className="sidebar-stat-label">Remaining</span>
+              <span className="sidebar-stat-value highlight">{remainingPrompts}</span>
+            </div>
+            <div className="sidebar-quota-stat-divider" />
+            <div className="sidebar-quota-stat-item">
+              <span className="sidebar-stat-label">Total Limit</span>
+              <span className="sidebar-stat-value">{maxPrompts}</span>
+            </div>
+          </div>
+
+          <div className="sidebar-quota-progress-track">
+            <div
+              className={`sidebar-quota-progress-fill ${remainingPrompts <= 0 ? 'exceeded' : remainingPrompts <= 20 ? 'warning' : 'normal'}`}
+              style={{
+                width: `${Math.min(100, Math.max(0, (userPromptCount / (maxPrompts || 1)) * 100))}%`,
+              }}
+            />
           </div>
         </div>
 
