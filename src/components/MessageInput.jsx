@@ -68,7 +68,14 @@ export default function MessageInput({
       return;
     }
 
-    // 2. Enforce only image files
+    // 2. Enforce 1 image at a time
+    if (attachment) {
+      showError('You can only upload one image at a time.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // 3. Enforce only image files
     const isImage = file.type
       ? file.type.startsWith('image/')
       : /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(file.name || '');
@@ -79,7 +86,7 @@ export default function MessageInput({
       return;
     }
 
-    // 3. Enforce maximum file size of 3MB
+    // 4. Enforce maximum file size of 3MB
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       showError(`Image size (${sizeMB}MB) exceeds the 3MB limit. Please choose a smaller image.`);
@@ -107,9 +114,14 @@ export default function MessageInput({
   const handleFileChange = (e) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    // Enforce 1 image at a time
-    const file = files[0];
-    processFile(file);
+
+    if (files.length > 1 || attachment) {
+      showError('You can only upload one image at a time.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    processFile(files[0]);
   };
 
   // Support pasting images from clipboard (e.g. screenshots)
@@ -117,17 +129,21 @@ export default function MessageInput({
     const items = e.clipboardData?.items;
     if (!items) return;
 
-    for (const item of items) {
-      if (item.kind === 'file') {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
-            processFile(file);
-          }
-        } else {
-          showError('Only image files up to 3MB are allowed.');
+    const fileItems = Array.from(items).filter((item) => item.kind === 'file');
+    if (fileItems.length > 1 || (attachment && fileItems.length > 0)) {
+      showError('You can only upload one image at a time.');
+      return;
+    }
+
+    if (fileItems.length === 1) {
+      const item = fileItems[0];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          processFile(file);
         }
-        break; // Only 1 image at a time
+      } else {
+        showError('Only image files up to 3MB are allowed.');
       }
     }
   };
@@ -138,6 +154,12 @@ export default function MessageInput({
     if (disabled || isLoading) return;
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
+
+    if (files.length > 1 || attachment) {
+      showError('You can only upload one image at a time.');
+      return;
+    }
+
     processFile(files[0]);
   };
 
@@ -148,6 +170,10 @@ export default function MessageInput({
   const handleAttachClick = () => {
     if (isQuotaExceeded) {
       showError(`You have reached the maximum limit of ${maxImages} images per user.`);
+      return;
+    }
+    if (attachment) {
+      showError('You can only upload one image at a time.');
       return;
     }
     fileInputRef.current?.click();
@@ -199,12 +225,13 @@ export default function MessageInput({
           onDrop={handleDrop}
           onDragOver={handleDragOver}
         >
-          {/* Hidden File Input: Single image only */}
+          {/* Hidden File Input */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
             accept="image/*,.png,.jpg,.jpeg,.webp,.svg,.gif,.bmp"
+            multiple
             style={{ display: 'none' }}
           />
 
