@@ -39,6 +39,13 @@ export default function MessageInput({
     };
   }, []);
 
+  // Clear quota error automatically when quota is available
+  useEffect(() => {
+    if (!isQuotaExceeded && errorMessage?.includes('maximum limit')) {
+      setErrorMessage(null);
+    }
+  }, [isQuotaExceeded, errorMessage]);
+
   // Auto-resize textarea to fit content
   useEffect(() => {
     if (textareaRef.current) {

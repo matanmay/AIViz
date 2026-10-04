@@ -78,7 +78,7 @@ export const loginUser = async (teamName, password) => {
   try {
     const { data, error } = await client
       .from('teams')
-      .select('team_name, password, model')
+      .select('team_name, password, model, remaining_images')
       .eq('team_name', trimmedName)
       .single();
 
@@ -97,6 +97,7 @@ export const loginUser = async (teamName, password) => {
       id: data.team_name,
       email: data.team_name,
       model: data.model || 'gemini-3.5-flash-lite',
+      remaining_images: typeof data.remaining_images === 'number' ? data.remaining_images : 3,
     };
 
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -133,12 +134,15 @@ export const getCurrentUser = async () => {
       try {
         const { data: teamRow } = await client
           .from('teams')
-          .select('model')
+          .select('model, remaining_images')
           .eq('team_name', teamName)
           .single();
 
-        if (teamRow?.model) {
-          session.model = teamRow.model;
+        if (teamRow) {
+          if (teamRow.model) session.model = teamRow.model;
+          if (typeof teamRow.remaining_images === 'number') {
+            session.remaining_images = teamRow.remaining_images;
+          }
           localStorage.setItem(SESSION_KEY, JSON.stringify(session));
         }
       } catch {
@@ -289,6 +293,47 @@ export const getUserImageCountFromDB = async (teamName) => {
 };
 
 /**
+ * Query DB for exact number of remaining images for this team/user.
+ * Reads directly from teams.remaining_images, with fallback to RPC / messages table count.
+ */
+export const getRemainingImagesFromDB = async (teamName) => {
+  const client = getSupabaseClient();
+  if (!client || !teamName) return null;
+
+  try {
+    // 1. Try reading remaining_images column from teams table
+    const { data: teamData, error: teamErr } = await client
+      .from('teams')
+      .select('remaining_images')
+      .eq('team_name', teamName)
+      .single();
+
+    if (!teamErr && teamData && typeof teamData.remaining_images === 'number') {
+      return teamData.remaining_images;
+    }
+
+    // 2. Try RPC function if defined in DB
+    const { data: rpcCount, error: rpcErr } = await client.rpc('get_remaining_images', {
+      p_team_name: teamName,
+    });
+    if (!rpcErr && typeof rpcCount === 'number') {
+      return rpcCount;
+    }
+
+    // 3. Fallback: compute 3 - used images from messages table
+    const usedCount = await getUserImageCountFromDB(teamName);
+    if (typeof usedCount === 'number') {
+      return Math.max(0, 3 - usedCount);
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Failed to query remaining images from DB:', err);
+    return null;
+  }
+};
+
+/**
  * Upload a file/image attachment to Supabase Storage.
  * Attempts to upload to 'chat-attachments' bucket.
  * Returns { url, path, name, type, size } on success, or null if storage is not available.
@@ -309,11 +354,11 @@ export const uploadAttachmentToSupabase = async (file, teamName = null) => {
     return null;
   }
 
-  // Enforce DB-level maximum of 3 images before uploading to Storage
+  // Enforce DB-level quota: check remaining images in DB before uploading to Storage
   if (teamName) {
-    const currentDbCount = await getUserImageCountFromDB(teamName);
-    if (currentDbCount !== null && currentDbCount >= 3) {
-      console.warn(`Storage upload rejected: User "${teamName}" has reached the maximum DB limit of 3 images.`);
+    const remaining = await getRemainingImagesFromDB(teamName);
+    if (remaining !== null && remaining <= 0) {
+      console.warn(`Storage upload rejected: User "${teamName}" has 0 remaining images in DB.`);
       return null;
     }
   }
@@ -399,15 +444,15 @@ export const logCompleteInteraction = async ({
       payload.tokens = assistantMessage.tokens || null;
     }
 
-    // Attach file/image metadata if present (strictly limited to 3 images max per team in DB)
+    // Attach file/image metadata if present (strictly limited to remaining_images > 0 in DB)
     let shouldLogAttachmentTelemetry = false;
     if (userMessage.attachment) {
       let isWithinDbQuota = true;
       if (teamName) {
-        const currentDbCount = await getUserImageCountFromDB(teamName);
-        if (currentDbCount !== null && currentDbCount >= 3) {
+        const remaining = await getRemainingImagesFromDB(teamName);
+        if (remaining !== null && remaining <= 0) {
           isWithinDbQuota = false;
-          console.warn(`DB quota reached: team "${teamName}" already has ${currentDbCount} images in DB. Skipping attachment persistence.`);
+          console.warn(`DB quota reached: team "${teamName}" has 0 remaining images in DB. Skipping attachment persistence.`);
         }
       }
 
@@ -418,6 +463,20 @@ export const logCompleteInteraction = async ({
         payload.attachment_type = userMessage.attachment.type || null;
         if (userMessage.attachment.dataUrl && userMessage.attachment.dataUrl.length < 500000) {
           payload.attachment_data = userMessage.attachment.dataUrl;
+        }
+
+        // Direct DB update for remaining_images as a fallback in case trigger is not yet installed
+        if (teamName) {
+          getRemainingImagesFromDB(teamName).then((rem) => {
+            if (typeof rem === 'number') {
+              client
+                .from('teams')
+                .update({ remaining_images: Math.max(0, rem - 1) })
+                .eq('team_name', teamName)
+                .then(() => {})
+                .catch(() => {});
+            }
+          }).catch(() => {});
         }
       }
     }
