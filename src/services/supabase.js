@@ -250,6 +250,18 @@ export const uploadAttachmentToSupabase = async (file, teamName = null) => {
   const client = getSupabaseClient();
   if (!client || !file) return null;
 
+  // Defensive validation: only images up to 3MB
+  const MAX_SIZE = 3 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    console.warn('File size exceeds 3MB limit, skipping Supabase upload');
+    return null;
+  }
+  const isImage = file.type ? file.type.startsWith('image/') : /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(file.name);
+  if (!isImage) {
+    console.warn('Non-image file rejected, skipping Supabase upload');
+    return null;
+  }
+
   try {
     const timestamp = Date.now();
     const cleanName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');

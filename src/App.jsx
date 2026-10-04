@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
@@ -173,6 +173,37 @@ export default function App() {
     if (currentUser?.team_name) {
       localStorage.setItem(`aiviz_messages_${currentUser.team_name}`, JSON.stringify(messagesMap));
     }
+  }, [messagesMap, currentUser]);
+
+  // Calculate total images uploaded by the user (max 3 images total per user)
+  const userImageCount = useMemo(() => {
+    const userKey = currentUser?.team_name || currentUser?.id || currentUser?.username || 'guest';
+    let countFromMessages = 0;
+    if (messagesMap && typeof messagesMap === 'object') {
+      Object.values(messagesMap).forEach((msgs) => {
+        if (Array.isArray(msgs)) {
+          msgs.forEach((m) => {
+            if (m?.role === 'user' && m?.attachment) {
+              countFromMessages++;
+            }
+          });
+        }
+      });
+    }
+
+    let storedCount = 0;
+    try {
+      const val = localStorage.getItem(`aiviz_user_image_count_${userKey}`);
+      if (val !== null) storedCount = parseInt(val, 10) || 0;
+    } catch (e) {}
+
+    const total = Math.max(countFromMessages, storedCount);
+    if (countFromMessages > storedCount) {
+      try {
+        localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(total));
+      } catch (e) {}
+    }
+    return total;
   }, [messagesMap, currentUser]);
 
   // Load user chats and messages whenever currentUser changes (login / user switch)
@@ -527,17 +558,40 @@ export default function App() {
     const userPrompt = textToSend;
     setInput('');
 
-    // If an attachment is provided, try uploading to Supabase Storage
+    // Enforce image restrictions: only images, max 3MB, max 3 total per user
     let processedAttachment = attachment;
-    if (attachment && attachment.file && isSupabaseConfigured()) {
+    if (attachment) {
+      const maxUserImages = 3;
+      const MAX_SIZE = 3 * 1024 * 1024;
+      const isImg = attachment.type
+        ? attachment.type.startsWith('image/')
+        : /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(attachment.name || '');
+
+      if (userImageCount >= maxUserImages) {
+        alert('You have reached the maximum limit of 3 images per user. The message will be sent without an image.');
+        processedAttachment = null;
+      } else if (!isImg) {
+        alert('Only image files are allowed (PNG, JPG, WebP, SVG, etc.).');
+        processedAttachment = null;
+      } else if (attachment.size > MAX_SIZE) {
+        alert('Image size exceeds 3MB limit. The message will be sent without an image.');
+        processedAttachment = null;
+      }
+    }
+
+    // Do not send if neither text nor valid attachment exists
+    if (!userPrompt && !processedAttachment) return;
+
+    // If an attachment is provided, try uploading to Supabase Storage
+    if (processedAttachment && processedAttachment.file && isSupabaseConfigured()) {
       try {
         const uploadResult = await uploadAttachmentToSupabase(
-          attachment.file,
+          processedAttachment.file,
           currentUser?.team_name
         );
         if (uploadResult?.url) {
           processedAttachment = {
-            ...attachment,
+            ...processedAttachment,
             url: uploadResult.url,
             path: uploadResult.path,
           };
@@ -545,6 +599,15 @@ export default function App() {
       } catch (uploadErr) {
         console.warn('Supabase storage upload fallback to local dataUrl:', uploadErr);
       }
+    }
+
+    // Update persistent user image count in localStorage
+    if (processedAttachment) {
+      const userKey = currentUser?.team_name || currentUser?.id || currentUser?.username || 'guest';
+      const nextCount = userImageCount + 1;
+      try {
+        localStorage.setItem(`aiviz_user_image_count_${userKey}`, String(nextCount));
+      } catch (e) {}
     }
 
     const userMessage = {
@@ -899,6 +962,8 @@ export default function App() {
           currentUser={currentUser}
           gamificationState={gamificationState}
           onDismissNudge={handleDismissNudge}
+          userImageCount={userImageCount}
+          maxImages={3}
         />
       </div>
 

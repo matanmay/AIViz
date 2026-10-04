@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ArrowUp, Loader2, Paperclip, X, Image as ImageIcon, Send, Sparkles } from 'lucide-react';
+import { ArrowUp, Loader2, X, Image as ImageIcon, Send, Sparkles, AlertCircle } from 'lucide-react';
 
 export default function MessageInput({
   input,
@@ -11,11 +11,33 @@ export default function MessageInput({
   awaitingFeedback = false,
   onSubmitDiagram,
   onOpenTemplates,
+  userImageCount = 0,
+  maxImages = 3,
 }) {
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const errorTimeoutRef = useRef(null);
   const [typingStartTime, setTypingStartTime] = useState(null);
   const [attachment, setAttachment] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const isQuotaExceeded = userImageCount >= maxImages;
+  const MAX_IMAGE_SIZE_BYTES = 3 * 1024 * 1024; // 3MB
+
+  // Auto-clear error after 6 seconds
+  const showError = (msg) => {
+    setErrorMessage(msg);
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    errorTimeoutRef.current = setTimeout(() => {
+      setErrorMessage(null);
+    }, 6000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    };
+  }, []);
 
   // Auto-resize textarea to fit content
   useEffect(() => {
@@ -35,9 +57,38 @@ export default function MessageInput({
     setInput(e.target.value);
   };
 
-  // Process file into attachment state with dataUrl
+  // Validate and process file into attachment state with dataUrl
   const processFile = (file) => {
     if (!file) return;
+
+    // 1. Enforce user total image limit (max 3 images total per user)
+    if (isQuotaExceeded) {
+      showError(`You have reached the maximum limit of ${maxImages} images per user. No more images can be uploaded.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // 2. Enforce only image files
+    const isImage = file.type
+      ? file.type.startsWith('image/')
+      : /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(file.name || '');
+
+    if (!isImage) {
+      showError('Only image files are allowed (PNG, JPG, WebP, SVG, etc.).');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // 3. Enforce maximum file size of 3MB
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      showError(`Image size (${sizeMB}MB) exceeds the 3MB limit. Please choose a smaller image.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Clear any previous error
+    setErrorMessage(null);
 
     // Read as Data URL for preview and multimodal AI payload
     const reader = new FileReader();
@@ -45,7 +96,7 @@ export default function MessageInput({
       setAttachment({
         file,
         name: file.name,
-        type: file.type || 'application/octet-stream',
+        type: file.type || 'image/png',
         size: file.size,
         dataUrl: e.target?.result,
       });
@@ -54,10 +105,11 @@ export default function MessageInput({
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processFile(file);
-    }
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    // Enforce 1 image at a time
+    const file = files[0];
+    processFile(file);
   };
 
   // Support pasting images from clipboard (e.g. screenshots)
@@ -66,18 +118,44 @@ export default function MessageInput({
     if (!items) return;
 
     for (const item of items) {
-      if (item.type.indexOf('image') !== -1) {
-        const file = item.getAsFile();
-        if (file) {
-          processFile(file);
-          break;
+      if (item.kind === 'file') {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            processFile(file);
+          }
+        } else {
+          showError('Only image files up to 3MB are allowed.');
         }
+        break; // Only 1 image at a time
       }
     }
   };
 
+  // Drag and drop image onto input
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (disabled || isLoading) return;
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    processFile(files[0]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleAttachClick = () => {
+    if (isQuotaExceeded) {
+      showError(`You have reached the maximum limit of ${maxImages} images per user.`);
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
   const handleRemoveAttachment = () => {
     setAttachment(null);
+    setErrorMessage(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -92,6 +170,7 @@ export default function MessageInput({
       setTypingStartTime(null);
       const currentAttachment = attachment;
       setAttachment(null);
+      setErrorMessage(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
 
       onSend(draftingDurationMs, currentAttachment);
@@ -115,50 +194,57 @@ export default function MessageInput({
   return (
     <form className="message-input-form" onSubmit={handleSubmit}>
       <div className="input-row-wrapper">
-        <div className="input-container">
-          {/* Hidden File Input */}
+        <div
+          className="input-container"
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+        >
+          {/* Hidden File Input: Single image only */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="image/*,.png,.jpg,.jpeg,.webp,.svg,.gif,.pdf,.txt,.json,.uml,.puml"
+            accept="image/*,.png,.jpg,.jpeg,.webp,.svg,.gif,.bmp"
             style={{ display: 'none' }}
           />
+
+          {/* Validation Error Banner */}
+          {errorMessage && (
+            <div className="message-input-error-banner" role="alert">
+              <div className="error-banner-content">
+                <AlertCircle size={15} className="error-banner-icon" />
+                <span className="error-banner-text">{errorMessage}</span>
+              </div>
+              <button
+                type="button"
+                className="error-banner-close"
+                onClick={() => setErrorMessage(null)}
+                title="Dismiss"
+                aria-label="Dismiss error message"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Attachment Preview Bar */}
           {attachment && (
             <div className="attachment-preview-container">
-              {attachment.type?.startsWith('image/') || attachment.dataUrl?.startsWith('data:image/') ? (
-                <div className="attachment-thumb-group">
-                  <img
-                    src={attachment.dataUrl}
-                    alt={attachment.name}
-                    className="attachment-thumbnail"
-                  />
-                  <div className="attachment-meta">
-                    <span className="attachment-name" title={attachment.name}>
-                      {attachment.name}
-                    </span>
-                    <span className="attachment-size">
-                      {(attachment.size / 1024).toFixed(1)} KB
-                    </span>
-                  </div>
+              <div className="attachment-thumb-group">
+                <img
+                  src={attachment.dataUrl}
+                  alt={attachment.name}
+                  className="attachment-thumbnail"
+                />
+                <div className="attachment-meta">
+                  <span className="attachment-name" title={attachment.name}>
+                    {attachment.name}
+                  </span>
+                  <span className="attachment-size">
+                    {(attachment.size / 1024).toFixed(1)} KB
+                  </span>
                 </div>
-              ) : (
-                <div className="attachment-thumb-group">
-                  <div className="attachment-file-icon">
-                    <Paperclip size={16} />
-                  </div>
-                  <div className="attachment-meta">
-                    <span className="attachment-name" title={attachment.name}>
-                      {attachment.name}
-                    </span>
-                    <span className="attachment-size">
-                      {(attachment.size / 1024).toFixed(1)} KB
-                    </span>
-                  </div>
-                </div>
-              )}
+              </div>
               <button
                 type="button"
                 className="remove-attachment-btn"
@@ -188,14 +274,25 @@ export default function MessageInput({
             <div className="input-left-actions">
               <button
                 type="button"
-                className={`attach-file-btn ${attachment ? 'active' : ''}`}
-                onClick={() => fileInputRef.current?.click()}
+                className={`attach-file-btn ${attachment ? 'active' : ''} ${isQuotaExceeded ? 'quota-blocked' : ''}`}
+                onClick={handleAttachClick}
                 disabled={disabled || isLoading}
-                title="Attach image or file (or paste from clipboard)"
-                aria-label="Attach image or file"
+                title={
+                  isQuotaExceeded
+                    ? `You have reached the maximum limit of ${maxImages} images per user`
+                    : `Attach image (${userImageCount}/${maxImages} used - up to 3MB, 1 image per message)`
+                }
+                aria-label="Attach image"
               >
                 <ImageIcon size={18} />
               </button>
+
+              <span
+                className={`image-quota-badge ${isQuotaExceeded ? 'limit-reached' : userImageCount === maxImages - 1 ? 'near-limit' : ''}`}
+                title={`Image limit: ${userImageCount}/${maxImages} used (up to 3MB each, 1 image per message)`}
+              >
+                📷 {userImageCount}/{maxImages} images
+              </span>
 
               {onOpenTemplates && (
                 <button

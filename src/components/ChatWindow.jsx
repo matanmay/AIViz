@@ -27,6 +27,8 @@ export default function ChatWindow({
   currentUser,
   gamificationState,
   onDismissNudge,
+  userImageCount = 0,
+  maxImages = 3,
 }) {
   const messagesEndRef = useRef(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -388,6 +390,8 @@ export default function ChatWindow({
           }
           onSubmitDiagram={handleSubmitDiagramClick}
           onOpenTemplates={() => setIsTemplateModalOpen(true)}
+          userImageCount={userImageCount}
+          maxImages={maxImages}
         />
       </footer>
 
