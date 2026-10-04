@@ -287,13 +287,6 @@ export default function MessageInput({
                 <ImageIcon size={18} />
               </button>
 
-              <span
-                className={`image-quota-badge ${isQuotaExceeded ? 'limit-reached' : userImageCount === maxImages - 1 ? 'near-limit' : ''}`}
-                title={`Image limit: ${userImageCount}/${maxImages} used (up to 3MB each, 1 image per message)`}
-              >
-                📷 {userImageCount}/{maxImages} images
-              </span>
-
               {onOpenTemplates && (
                 <button
                   type="button"
